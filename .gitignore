@@ -1,0 +1,35 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode user-specific data
+*.xcodeproj/project.xcworkspace/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# Xcode and Apple build artifacts
+DerivedData/
+build/
+.xcodebuild/
+*.app
+*.dSYM/
+*.dSYM.zip
+*.ipa
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Common editor/OS noise
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local environment files
+.env
+.env.*
+!.env.example

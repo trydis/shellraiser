@@ -1,0 +1,13 @@
+{
+  "CFBundleIdentifier": "com.shellraiser.app",
+  "CFBundleName": "Shellraiser",
+  "CFBundleInfoDictionaryVersion": "6.0",
+  "CFBundlePackageType": "APPL",
+  "CFBundleShortVersionString": "1.0",
+  "CFBundleVersion": "1",
+  "LSMinimumSystemVersion": "14.0",
+  "NSHighResolutionCapable": true,
+  "CFBundleExecutable": "Shellraiser",
+  "NSAppleEventsUsageDescription": "Shellraiser needs automation access to manage terminal processes.",
+  "NSAppleScriptEnabled": true
+}
