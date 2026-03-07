@@ -15,7 +15,7 @@ main() {
     ensure_submodule_exists
     ensure_submodule_initialized
 
-    git -C "$SUBMODULE_PATH" fetch --tags
+    refresh_target_tag
 
     local target_commit current_commit
     target_commit="$(git -C "$SUBMODULE_PATH" rev-list -n 1 "refs/tags/$TAG_NAME")"
@@ -62,6 +62,11 @@ ensure_submodule_initialized() {
     if ! git -C "$SUBMODULE_PATH" rev-parse --git-dir >/dev/null 2>&1; then
         git submodule update --init "$SUBMODULE_PATH"
     fi
+}
+
+refresh_target_tag() {
+    git -C "$SUBMODULE_PATH" fetch origin \
+        "+refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
 }
 
 main "$@"
