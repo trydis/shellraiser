@@ -17,8 +17,10 @@ class WorkspaceTestCase: XCTestCase {
         let subdirectory = "ShellraiserTests-\(sanitizedTestName)-\(UUID().uuidString)"
 
         setenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey, subdirectory, 1)
+        setenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey, "1", 1)
         addTeardownBlock {
             unsetenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey)
+            unsetenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey)
 
             let fileManager = FileManager.default
             let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

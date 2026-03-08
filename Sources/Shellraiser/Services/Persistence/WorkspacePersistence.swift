@@ -5,6 +5,9 @@ final class WorkspacePersistence {
     /// Environment variable used to force a dedicated Application Support subdirectory.
     static let appSupportSubdirectoryEnvironmentKey = "SHELLRAISER_APP_SUPPORT_SUBDIRECTORY"
 
+    /// Environment variable used to suppress persistence error logs during tests.
+    static let suppressErrorLoggingEnvironmentKey = "SHELLRAISER_SUPPRESS_PERSISTENCE_ERRORS"
+
     private let fileManager = FileManager.default
     private let workspaceFileURL: URL
 
@@ -44,6 +47,12 @@ final class WorkspacePersistence {
         return "Shellraiser-\(String(sanitizedIdentifier))"
     }
 
+    /// Returns whether persistence failures should be logged for the current process.
+    private static var shouldLogErrors: Bool {
+        let rawValue = ProcessInfo.processInfo.environment[suppressErrorLoggingEnvironmentKey] ?? ""
+        return !["1", "true", "yes", "on"].contains(rawValue.lowercased())
+    }
+
     /// Loads serialized workspaces from disk.
     func load() -> [WorkspaceModel]? {
         guard fileManager.fileExists(atPath: workspaceFileURL.path) else {
@@ -56,7 +65,9 @@ final class WorkspacePersistence {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode([WorkspaceModel].self, from: data)
         } catch {
-            print("Failed to load workspaces: \(error)")
+            if Self.shouldLogErrors {
+                print("Failed to load workspaces: \(error)")
+            }
             return nil
         }
     }
@@ -76,7 +87,9 @@ final class WorkspacePersistence {
 
             try data.write(to: workspaceFileURL, options: .atomic)
         } catch {
-            print("Failed to save workspaces: \(error)")
+            if Self.shouldLogErrors {
+                print("Failed to save workspaces: \(error)")
+            }
         }
     }
 }
