@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          zig_version="$(sed -n 's/.*minimum_zig_version = \"\\([^\"]*\\)\".*/\\1/p' ghostty/build.zig.zon)"
+          zig_version="$(awk -F'"' '/minimum_zig_version/ { print $2; exit }' ghostty/build.zig.zon)"
           if [ -z "$zig_version" ]; then
             echo "Failed to determine Ghostty Zig version" >&2
             exit 1
