@@ -6,6 +6,11 @@ import XCTest
 class WorkspaceTestCase: XCTestCase {
     /// Creates a persistence instance rooted in a unique Application Support subdirectory.
     func makePersistence(testName: String = #function) -> WorkspacePersistence {
+        makePersistenceContext(testName: testName).persistence
+    }
+
+    /// Creates a persistence instance together with its isolated Application Support directory.
+    func makePersistenceContext(testName: String = #function) -> (persistence: WorkspacePersistence, directory: URL) {
         let sanitizedTestName = testName
             .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "-", options: .regularExpression)
         let subdirectory = "ShellraiserTests-\(sanitizedTestName)-\(UUID().uuidString)"
@@ -20,7 +25,9 @@ class WorkspaceTestCase: XCTestCase {
             try? fileManager.removeItem(at: testDirectory)
         }
 
-        return WorkspacePersistence()
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let directory = appSupport.appendingPathComponent(subdirectory, isDirectory: true)
+        return (WorkspacePersistence(), directory)
     }
 
     /// Creates a deterministic surface fixture with overridable state.
