@@ -23,7 +23,7 @@ Shellraiser is a macOS terminal workspace app built with SwiftUI and GhosttyKit.
 Clone the repository and initialize submodules:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/trydis/shellraiser.git
 cd shellraiser
 git submodule update --init --recursive
 ```
