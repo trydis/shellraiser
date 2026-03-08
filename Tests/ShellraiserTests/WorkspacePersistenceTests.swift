@@ -107,4 +107,89 @@ final class WorkspacePersistenceTests: WorkspaceTestCase {
         XCTAssertEqual(firstContext.persistence.load(), [firstWorkspace])
         XCTAssertEqual(secondContext.persistence.load(), [secondWorkspace])
     }
+
+    /// Verifies safe single-component overrides are still honored for isolated persistence roots.
+    func testPersistenceUsesValidatedOverrideSubdirectory() throws {
+        let subdirectory = "ShellraiserDev-Validated_01"
+        setenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey, subdirectory, 1)
+        setenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey, "1", 1)
+        addTeardownBlock {
+            unsetenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey)
+            unsetenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey)
+
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            try? FileManager.default.removeItem(
+                at: appSupport.appendingPathComponent(subdirectory, isDirectory: true)
+            )
+        }
+
+        let persistence = WorkspacePersistence()
+        let workspace = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001021")!,
+            name: "Validated Override",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000001022")!,
+                surfaces: [
+                    makeSurface(
+                        id: UUID(uuidString: "00000000-0000-0000-0000-000000001023")!,
+                        title: "Validated"
+                    )
+                ]
+            )
+        )
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let overrideFile = appSupport
+            .appendingPathComponent(subdirectory, isDirectory: true)
+            .appendingPathComponent("workspaces.json")
+
+        persistence.save([workspace])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: overrideFile.path))
+        XCTAssertEqual(persistence.load(), [workspace])
+    }
+
+    /// Verifies invalid overrides cannot escape the default Application Support location.
+    func testPersistenceRejectsUnsafeOverrideSubdirectory() throws {
+        let invalidOverride = "../ShellraiserEscape"
+        let defaultDirectory = "Shellraiser"
+        setenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey, invalidOverride, 1)
+        setenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey, "1", 1)
+        addTeardownBlock {
+            unsetenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey)
+            unsetenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey)
+
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            try? FileManager.default.removeItem(
+                at: appSupport.appendingPathComponent(defaultDirectory, isDirectory: true)
+            )
+        }
+
+        let persistence = WorkspacePersistence()
+        let workspace = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001031")!,
+            name: "Unsafe Override Fallback",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000001032")!,
+                surfaces: [
+                    makeSurface(
+                        id: UUID(uuidString: "00000000-0000-0000-0000-000000001033")!,
+                        title: "Fallback"
+                    )
+                ]
+            )
+        )
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let defaultFile = appSupport
+            .appendingPathComponent(defaultDirectory, isDirectory: true)
+            .appendingPathComponent("workspaces.json")
+        let escapedFile = appSupport
+            .appendingPathComponent(invalidOverride, isDirectory: true)
+            .appendingPathComponent("workspaces.json")
+
+        persistence.save([workspace])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: defaultFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: escapedFile.path))
+        XCTAssertEqual(persistence.load(), [workspace])
+    }
 }

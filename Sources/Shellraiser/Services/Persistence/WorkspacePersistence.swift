@@ -26,8 +26,8 @@ final class WorkspacePersistence {
         let environment = ProcessInfo.processInfo.environment
         if let override = environment[appSupportSubdirectoryEnvironmentKey]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-           !override.isEmpty {
-            return override
+           let validatedOverride = validatedAppSupportSubdirectory(override) {
+            return validatedOverride
         }
 
         let defaultBundleIdentifier = "com.shellraiser.app"
@@ -37,6 +37,30 @@ final class WorkspacePersistence {
         }
 
         return "Shellraiser"
+    }
+
+    /// Validates that an override is a single safe Application Support path component.
+    private static func validatedAppSupportSubdirectory(_ override: String) -> String? {
+        guard !override.isEmpty else {
+            return nil
+        }
+
+        guard !override.contains("/"), !override.contains("\\") else {
+            return nil
+        }
+
+        guard override != ".", override != ".." else {
+            return nil
+        }
+
+        let allowedCharacters = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: "._-")
+        )
+        guard override.unicodeScalars.allSatisfy(allowedCharacters.contains) else {
+            return nil
+        }
+
+        return override
     }
 
     /// Produces a filesystem-friendly Application Support subdirectory name.
