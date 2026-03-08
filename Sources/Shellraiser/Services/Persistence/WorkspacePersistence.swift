@@ -31,7 +31,8 @@ final class WorkspacePersistence {
         }
 
         let defaultBundleIdentifier = "com.shellraiser.app"
-        if let bundleIdentifier = Bundle.main.bundleIdentifier,
+        if shouldUseBundleSpecificAppSupportSubdirectory,
+           let bundleIdentifier = Bundle.main.bundleIdentifier,
            bundleIdentifier != defaultBundleIdentifier {
             return sanitizedAppSupportSubdirectory(for: bundleIdentifier)
         }
@@ -69,6 +70,17 @@ final class WorkspacePersistence {
             character.isLetter || character.isNumber ? character : "-"
         }
         return "Shellraiser-\(String(sanitizedIdentifier))"
+    }
+
+    /// Returns whether the current process is a packaged app bundle.
+    private static var shouldUseBundleSpecificAppSupportSubdirectory: Bool {
+        guard let packageType = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundlePackageType"
+        ) as? String else {
+            return false
+        }
+
+        return packageType == "APPL" && Bundle.main.bundleURL.pathExtension == "app"
     }
 
     /// Returns whether persistence failures should be logged for the current process.
