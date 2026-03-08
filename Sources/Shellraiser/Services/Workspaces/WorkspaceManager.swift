@@ -78,6 +78,7 @@ final class WorkspaceManager: ObservableObject {
     var nextPendingCompletionSequence = 1
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
     var recentlyHandledSurfaceExpirations: [UUID: Date] = [:]
+    var hasLoadedPersistedWorkspaces = false
 
     /// Creates a manager with explicit dependencies for testability.
     init(

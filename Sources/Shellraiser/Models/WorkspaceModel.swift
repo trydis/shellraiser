@@ -9,8 +9,11 @@ struct WorkspaceModel: Identifiable, Codable, Equatable {
     var zoomedPaneId: UUID?
 
     /// Creates a new workspace with one starter pane and surface.
-    static func makeDefault(name: String = "New Workspace") -> WorkspaceModel {
-        let tree = PaneNodeModel.initialTree()
+    static func makeDefault(
+        name: String = "New Workspace",
+        initialSurface: SurfaceModel = SurfaceModel.makeDefault()
+    ) -> WorkspaceModel {
+        let tree = PaneNodeModel.initialTree(surface: initialSurface)
 
         var focusedSurfaceId: UUID?
         if case .leaf(let leaf) = tree {

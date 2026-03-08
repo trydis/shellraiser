@@ -227,7 +227,9 @@ final class GhosttyRuntime {
         guard let hostView = hostViewsBySurfaceId[surfaceId] else { return }
         let window = hostView.window ?? NSApp.keyWindow
         guard let window else { return }
+        window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(hostView)
+        setSurfaceFocus(surfaceId: surfaceId, focused: true)
         pendingFocusedSurfaceId = nil
     }
 
@@ -235,18 +237,23 @@ final class GhosttyRuntime {
     func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: LibghosttySurfaceView) {
         guard pendingFocusedSurfaceId == surfaceId else { return }
         guard let window = hostView.window ?? NSApp.keyWindow else { return }
+        window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(hostView)
+        setSurfaceFocus(surfaceId: surfaceId, focused: true)
         pendingFocusedSurfaceId = nil
     }
 
     /// Sends literal text input to a surface.
-    func sendText(surfaceId: UUID, text: String) {
-        guard let surface = surfaceHandlesById[surfaceId] else { return }
-        guard !text.isEmpty else { return }
+    @discardableResult
+    func sendText(surfaceId: UUID, text: String) -> Bool {
+        guard let surface = surfaceHandlesById[surfaceId] else { return false }
+        guard !text.isEmpty else { return true }
 
         text.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
         }
+
+        return true
     }
 
     /// Runs a named Ghostty binding action for a surface.
@@ -294,6 +301,45 @@ final class GhosttyRuntime {
         } else {
             _ = ghostty_surface_key(surface, keyEvent)
         }
+    }
+
+    /// Sends a named control key directly to a surface via Ghostty's key-event path.
+    @discardableResult
+    func sendNamedKey(surfaceId: UUID, keyName: String) -> Bool {
+        guard let mapping = scriptKeyMapping(for: keyName) else { return false }
+        guard let keyDown = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: 0,
+            context: nil,
+            characters: mapping.characters,
+            charactersIgnoringModifiers: mapping.characters,
+            isARepeat: false,
+            keyCode: mapping.keyCode
+        ) else {
+            return false
+        }
+
+        guard let keyUp = NSEvent.keyEvent(
+            with: .keyUp,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: 0,
+            context: nil,
+            characters: mapping.characters,
+            charactersIgnoringModifiers: mapping.characters,
+            isARepeat: false,
+            keyCode: mapping.keyCode
+        ) else {
+            return false
+        }
+
+        sendKeyEvent(surfaceId: surfaceId, event: keyDown, action: GHOSTTY_ACTION_PRESS)
+        sendKeyEvent(surfaceId: surfaceId, event: keyUp, action: GHOSTTY_ACTION_RELEASE)
+        return true
     }
 
     /// Returns modifier flags translated by libghostty for the current surface settings.
@@ -414,6 +460,22 @@ final class GhosttyRuntime {
             blue: CGFloat(color.b) / 255,
             alpha: 1
         )
+    }
+
+    /// Maps AppleScript key names onto AppKit key event payloads.
+    private func scriptKeyMapping(for keyName: String) -> (keyCode: UInt16, characters: String)? {
+        switch keyName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "enter", "return":
+            return (36, "\r")
+        case "tab":
+            return (48, "\t")
+        case "escape", "esc":
+            return (53, "\u{1B}")
+        case "backspace", "delete":
+            return (51, "\u{7F}")
+        default:
+            return nil
+        }
     }
 
     /// Initializes libghostty app/config/runtime callbacks exactly once.

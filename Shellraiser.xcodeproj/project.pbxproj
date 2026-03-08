@@ -49,6 +49,11 @@
 		A1000034 /* AgentRuntimeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000034; };
 		A1000035 /* AgentCompletionEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035; };
 		A1000036 /* AgentCompletionNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036; };
+		A1000045 /* ShellraiserScriptingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000045; };
+		A1000046 /* ScriptableTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000046; };
+		A1000047 /* ShellraiserScriptCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047; };
+		A1000048 /* WorkspaceManager+AppleScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048; };
+		A1000049 /* ShellraiserScripting.xml in Resources */ = {isa = PBXBuildFile; fileRef = A2000049; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -94,6 +99,11 @@
 		A2000034 /* AgentRuntimeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Agents/AgentRuntimeBridge.swift; sourceTree = "<group>"; };
 		A2000035 /* AgentCompletionEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Agents/AgentCompletionEventMonitor.swift; sourceTree = "<group>"; };
 		A2000036 /* AgentCompletionNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Agents/AgentCompletionNotificationManager.swift; sourceTree = "<group>"; };
+		A2000045 /* ShellraiserScriptingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/AppleScript/ShellraiserScriptingController.swift; sourceTree = "<group>"; };
+		A2000046 /* ScriptableTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/AppleScript/ScriptableTerminal.swift; sourceTree = "<group>"; };
+		A2000047 /* ShellraiserScriptCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/AppleScript/ShellraiserScriptCommands.swift; sourceTree = "<group>"; };
+		A2000048 /* WorkspaceManager+AppleScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Infrastructure/AppleScript/WorkspaceManager+AppleScript.swift"; sourceTree = "<group>"; };
+		A2000049 /* ShellraiserScripting.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Infrastructure/AppleScript/ShellraiserScripting.xml; sourceTree = "<group>"; };
 		A3000001 /* Shellraiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shellraiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -162,6 +172,11 @@
 				A2000034 /* AgentRuntimeBridge.swift */,
 				A2000035 /* AgentCompletionEventMonitor.swift */,
 				A2000036 /* AgentCompletionNotificationManager.swift */,
+				A2000045 /* ShellraiserScriptingController.swift */,
+				A2000046 /* ScriptableTerminal.swift */,
+				A2000047 /* ShellraiserScriptCommands.swift */,
+				A2000048 /* WorkspaceManager+AppleScript.swift */,
+				A2000049 /* ShellraiserScripting.xml */,
 			);
 			path = Sources/Shellraiser;
 			sourceTree = "<group>";
@@ -241,6 +256,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000016 /* Assets.xcassets in Resources */,
+				A1000049 /* ShellraiserScripting.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -291,6 +307,10 @@
 				A1000034 /* AgentRuntimeBridge.swift in Sources */,
 				A1000035 /* AgentCompletionEventMonitor.swift in Sources */,
 				A1000036 /* AgentCompletionNotificationManager.swift in Sources */,
+				A1000045 /* ShellraiserScriptingController.swift in Sources */,
+				A1000046 /* ScriptableTerminal.swift in Sources */,
+				A1000047 /* ShellraiserScriptCommands.swift in Sources */,
+				A1000048 /* WorkspaceManager+AppleScript.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,8 +443,8 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Shellraiser/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -454,8 +474,8 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Shellraiser/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

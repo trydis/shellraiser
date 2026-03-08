@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary xmlns:xi="http://www.w3.org/2003/XInclude" title="Shellraiser Scripting Dictionary">
+    <xi:include
+        href="file:///System/Library/ScriptingDefinitions/CocoaStandard.sdef"
+        xpointer="xpointer(/dictionary/suite)"
+    />
+
+    <suite name="Shellraiser Suite" code="ShRs" description="Commands for automating Shellraiser terminal surfaces.">
+        <enumeration name="split direction" code="ShDi">
+            <enumerator name="left" code="ShLf"/>
+            <enumerator name="right" code="ShRt"/>
+            <enumerator name="up" code="ShUp"/>
+            <enumerator name="down" code="ShDn"/>
+        </enumeration>
+
+        <command name="new workspace" code="ShRsNwWs" description="Creates a new workspace.">
+            <cocoa class="NewWorkspaceScriptCommand"/>
+            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration to apply to the new workspace."/>
+            <result type="workspace" description="The newly created workspace."/>
+        </command>
+
+        <command name="new surface configuration" code="ShRsNwCf" description="Creates a new surface configuration.">
+            <cocoa class="NewSurfaceConfigurationScriptCommand"/>
+            <result type="surface configuration" description="The newly created configuration."/>
+        </command>
+
+        <command name="count workspaces" code="ShRsCtWs" description="Returns the number of open workspaces.">
+            <cocoa class="CountWorkspacesScriptCommand"/>
+            <result type="integer" description="The workspace count."/>
+        </command>
+
+        <command name="input" code="ShRsInTx" description="Inputs literal text into a terminal surface.">
+            <cocoa class="InputTextScriptCommand"/>
+            <parameter name="text" code="ctxt" type="text" description="Text to input."/>
+            <parameter name="to" code="insh" type="terminal" description="Terminal surface that receives the text."/>
+        </command>
+
+        <command name="send" code="ShRsSdKy" description="Sends a named control key to a terminal surface.">
+            <cocoa class="SendKeyScriptCommand"/>
+            <parameter name="key" code="skey" type="text" description="Key name such as enter or tab."/>
+            <parameter name="to" code="insh" type="terminal" description="Terminal surface that receives the key."/>
+        </command>
+
+        <command name="focus" code="ShRsFcTm" description="Focuses a terminal surface in the Shellraiser window.">
+            <cocoa class="FocusTerminalScriptCommand"/>
+            <parameter name="terminal" code="Trml" type="terminal" description="Terminal surface to focus."/>
+        </command>
+
+        <command name="split" code="ShRsSplt" description="Splits the pane that owns a terminal surface.">
+            <cocoa class="SplitTerminalScriptCommand"/>
+            <parameter name="terminal" code="Trml" type="terminal" description="Terminal surface whose pane should be split."/>
+            <parameter name="direction" code="ShDr" type="split direction" description="Direction for the new pane."/>
+            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration applied to the new terminal."/>
+            <result type="terminal" description="The newly created terminal surface."/>
+        </command>
+
+        <class name="surface configuration" code="SFCg" description="Configuration applied when creating scripted surfaces.">
+            <cocoa class="ScriptableSurfaceConfiguration"/>
+            <property name="initial working directory" code="ShWd" type="text" access="rw" description="Initial working directory for created surfaces.">
+                <cocoa key="initialWorkingDirectory"/>
+            </property>
+        </class>
+
+        <class name="workspace" code="ShWs" plural="workspaces" description="A Shellraiser workspace.">
+            <cocoa class="ScriptableWorkspace"/>
+            <element type="tab" access="r">
+                <cocoa key="tabs"/>
+            </element>
+            <property name="name" code="pnam" type="text" access="r" description="Visible workspace name."/>
+            <property name="id" code="ID  " type="text" access="r" description="Stable workspace identifier."/>
+            <property name="selected tab" code="ShSt" type="tab" access="r" description="The currently selected tab.">
+                <cocoa key="selectedTab"/>
+            </property>
+        </class>
+
+        <class name="tab" code="ShTb" plural="tabs" description="A scripted tab wrapper for one terminal surface.">
+            <cocoa class="ScriptableTab"/>
+            <element type="terminal" access="r">
+                <cocoa key="terminals"/>
+            </element>
+            <property name="name" code="pnam" type="text" access="r" description="Visible tab name."/>
+        </class>
+
+        <class name="terminal" code="Trml" plural="terminals" description="An open Shellraiser terminal surface.">
+            <cocoa class="ScriptableTerminal"/>
+            <responds-to command="input">
+                <cocoa method="handleInputTextScriptCommand:"/>
+            </responds-to>
+            <responds-to command="send">
+                <cocoa method="handleSendKeyScriptCommand:"/>
+            </responds-to>
+            <responds-to command="focus">
+                <cocoa method="handleFocusScriptCommand:"/>
+            </responds-to>
+            <property name="id" code="ID  " type="text" access="r" description="Stable surface identifier."/>
+            <property name="name" code="pnam" type="text" access="r" description="Visible terminal name."/>
+            <property name="title" code="ptit" type="text" access="r" description="Visible terminal title."/>
+            <property name="working directory" code="cwrd" type="text" access="r" description="Current terminal working directory.">
+                <cocoa key="workingDirectory"/>
+            </property>
+        </class>
+
+        <class-extension extends="application" description="The Shellraiser application.">
+            <element type="surface configuration" access="rw">
+                <cocoa key="surfaceConfigurations"/>
+            </element>
+
+            <element type="workspace" access="r">
+                <cocoa key="workspaces"/>
+            </element>
+
+            <element type="terminal" access="r">
+                <cocoa key="terminals"/>
+            </element>
+
+            <responds-to command="input">
+                <cocoa method="handleInputScriptCommand:"/>
+            </responds-to>
+            <responds-to command="send">
+                <cocoa method="handleSendScriptCommand:"/>
+            </responds-to>
+            <responds-to command="focus">
+                <cocoa method="handleFocusScriptCommand:"/>
+            </responds-to>
+        </class-extension>
+    </suite>
+</dictionary>

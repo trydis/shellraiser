@@ -58,6 +58,7 @@ extension WorkspaceManager {
             workspaceId: workspaceId,
             paneId: paneId,
             orientation: orientation,
+            newSurface: configuredDefaultSurface(),
             workspaces: &workspaces,
             persistence: persistence
         ) {
@@ -102,10 +103,11 @@ extension WorkspaceManager {
     /// Creates a surface in the currently focused pane of the selected workspace.
     func createSurfaceInFocusedPane() {
         guard let context = focusedPaneContext() else { return }
-
-        var surface = SurfaceModel.makeDefault()
-        surface.terminalConfig.workingDirectory = NSHomeDirectory()
-        addSurface(workspaceId: context.workspaceId, paneId: context.paneId, surface: surface)
+        addSurface(
+            workspaceId: context.workspaceId,
+            paneId: context.paneId,
+            surface: configuredDefaultSurface()
+        )
     }
 
     /// Returns whether an app-owned focused-pane command is currently supported.
@@ -354,9 +356,11 @@ extension WorkspaceManager {
 
         switch command {
         case .newSurface:
-            var surface = SurfaceModel.makeDefault()
-            surface.terminalConfig.workingDirectory = NSHomeDirectory()
-            addSurface(workspaceId: context.workspaceId, paneId: context.paneId, surface: surface)
+            addSurface(
+                workspaceId: context.workspaceId,
+                paneId: context.paneId,
+                surface: configuredDefaultSurface()
+            )
         case .split(let orientation):
             splitPane(workspaceId: context.workspaceId, paneId: context.paneId, orientation: orientation)
         case .closeActiveItem:
@@ -454,6 +458,13 @@ extension WorkspaceManager {
             paneId: paneId,
             surfaceId: surfaceId
         )
+    }
+
+    /// Builds the standard surface model used by app-driven surface creation flows.
+    private func configuredDefaultSurface() -> SurfaceModel {
+        var surface = SurfaceModel.makeDefault()
+        surface.terminalConfig.workingDirectory = NSHomeDirectory()
+        return surface
     }
 
     /// Returns focused pane context resolved from responder, workspace, and pane state.

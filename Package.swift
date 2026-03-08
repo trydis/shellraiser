@@ -19,6 +19,9 @@ let package = Package(
                 "GhosttyKit"
             ],
             path: "Sources/Shellraiser",
+            resources: [
+                .copy("Infrastructure/AppleScript/ShellraiserScripting.xml")
+            ],
             linkerSettings: [
                 .linkedLibrary("c++"),
                 .linkedFramework("Carbon")

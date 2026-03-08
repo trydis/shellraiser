@@ -64,13 +64,18 @@ extension WorkspaceSurfaceManager {
         workspaceId: UUID,
         paneId: UUID,
         orientation: SplitOrientation,
+        newSurface: SurfaceModel = SurfaceModel.makeDefault(),
         workspaces: inout [WorkspaceModel],
         persistence: WorkspacePersistence
     ) -> UUID? {
         var createdSurfaceId: UUID?
 
         mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
-            if let newSurfaceId = workspace.rootPane.splitLeaf(paneId: paneId, orientation: orientation) {
+            if let newSurfaceId = workspace.rootPane.splitLeaf(
+                paneId: paneId,
+                orientation: orientation,
+                newSurface: newSurface
+            ) {
                 workspace.focusedSurfaceId = newSurfaceId
                 createdSurfaceId = newSurfaceId
             }

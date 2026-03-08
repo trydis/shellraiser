@@ -9,12 +9,15 @@ extension WorkspaceManager {
 
     /// Loads persisted workspaces and initializes selection.
     func loadWorkspaces() {
+        guard !hasLoadedPersistedWorkspaces else { return }
+
         workspaceCatalog.loadWorkspaces(
             into: &workspaces,
             window: &window,
             persistence: persistence
         )
         synchronizePendingCompletionCursor()
+        hasLoadedPersistedWorkspaces = true
     }
 
     /// Finds a workspace by identifier.
@@ -24,9 +27,13 @@ extension WorkspaceManager {
 
     /// Creates a workspace and selects it.
     @discardableResult
-    func createWorkspace(name: String = "New Workspace") -> WorkspaceModel {
+    func createWorkspace(
+        name: String = "New Workspace",
+        initialSurface: SurfaceModel = SurfaceModel.makeDefault()
+    ) -> WorkspaceModel {
         workspaceCatalog.createWorkspace(
             name: name,
+            initialSurface: initialSurface,
             workspaces: &workspaces,
             window: &window,
             persistence: persistence

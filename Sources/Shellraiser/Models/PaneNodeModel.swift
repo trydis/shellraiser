@@ -81,8 +81,7 @@ indirect enum PaneNodeModel: Identifiable, Codable, Equatable {
     }
 
     /// Creates a default tree with one pane and one surface.
-    static func initialTree() -> PaneNodeModel {
-        let surface = SurfaceModel.makeDefault()
+    static func initialTree(surface: SurfaceModel = SurfaceModel.makeDefault()) -> PaneNodeModel {
         let leaf = PaneLeafModel(id: UUID(), surfaces: [surface], activeSurfaceId: surface.id)
         return .leaf(leaf)
     }
