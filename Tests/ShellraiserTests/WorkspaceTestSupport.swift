@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import Shellraiser
@@ -92,5 +93,76 @@ class WorkspaceTestCase: XCTestCase {
             focusedSurfaceId: focusedSurfaceId,
             zoomedPaneId: zoomedPaneId
         )
+    }
+
+    /// Returns the first surface stored in a leaf pane.
+    func surface(in rootPane: PaneNodeModel, paneId: UUID) -> SurfaceModel? {
+        guard case .leaf(let leaf) = rootPane.paneNode(id: paneId) else { return nil }
+        return leaf.surfaces.first
+    }
+
+    /// Creates a workspace manager with controllable test doubles.
+    @MainActor
+    func makeWorkspaceManager(
+        persistence: WorkspacePersistence? = nil,
+        workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
+        surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
+        runtimeBridge: MockAgentRuntimeBridge? = nil,
+        notifications: MockAgentCompletionNotificationManager? = nil,
+        eventMonitor: MockAgentCompletionEventMonitor? = nil
+    ) -> WorkspaceManager {
+        _ = NSApplication.shared
+        return WorkspaceManager(
+            persistence: persistence ?? makePersistence(),
+            workspaceCatalog: workspaceCatalog,
+            surfaceManager: surfaceManager,
+            runtimeBridge: runtimeBridge ?? MockAgentRuntimeBridge(),
+            completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
+            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor()
+        )
+    }
+}
+
+/// Minimal runtime-bridge test double for workspace-manager orchestration tests.
+@MainActor
+final class MockAgentRuntimeBridge: AgentRuntimeSupporting {
+    private(set) var prepareRuntimeSupportCallCount = 0
+    let eventLogURL: URL
+
+    /// Creates a mock runtime bridge with a disposable event log URL.
+    init(eventLogURL: URL = URL(fileURLWithPath: "/tmp/shellraiser-tests-event-log")) {
+        self.eventLogURL = eventLogURL
+    }
+
+    /// Records runtime preparation calls from manager initialization.
+    func prepareRuntimeSupport() {
+        prepareRuntimeSupportCallCount += 1
+    }
+}
+
+/// Notification-manager test double that records scheduling and removal.
+final class MockAgentCompletionNotificationManager: AgentCompletionNotificationManaging {
+    var onActivateSurface: ((UUID) -> Void)?
+    private(set) var scheduledNotifications: [(target: PendingCompletionTarget, workspaceName: String)] = []
+    private(set) var removedSurfaceIds: [UUID] = []
+
+    /// Records notification scheduling requests.
+    func scheduleNotification(target: PendingCompletionTarget, workspaceName: String) {
+        scheduledNotifications.append((target: target, workspaceName: workspaceName))
+    }
+
+    /// Records notification-removal requests.
+    func removeNotifications(for surfaceId: UUID) {
+        removedSurfaceIds.append(surfaceId)
+    }
+}
+
+/// Completion-event monitor test double that allows tests to trigger callbacks manually.
+final class MockAgentCompletionEventMonitor: AgentCompletionEventMonitoring {
+    var onEvent: ((AgentCompletionEvent) -> Void)?
+
+    /// Emits a synthetic completion event into the manager under test.
+    func emit(_ event: AgentCompletionEvent) {
+        onEvent?(event)
     }
 }
