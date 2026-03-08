@@ -27,6 +27,13 @@ let package = Package(
                 .linkedFramework("Carbon")
             ]
         ),
+        .testTarget(
+            name: "ShellraiserTests",
+            dependencies: [
+                "Shellraiser"
+            ],
+            path: "Tests/ShellraiserTests"
+        ),
         .binaryTarget(
             name: "GhosttyKit",
             path: "ghostty/macos/GhosttyKit.xcframework"
