@@ -51,9 +51,9 @@ jobs:
               ;;
           esac
 
-          curl -L "https://ziglang.org/download/${zig_version}/zig-macos-${zig_arch}-${zig_version}.tar.xz" -o zig.tar.xz
+          curl -L "https://ziglang.org/download/${zig_version}/zig-${zig_arch}-macos-${zig_version}.tar.xz" -o zig.tar.xz
           tar -xf zig.tar.xz
-          echo "$PWD/zig-macos-${zig_arch}-${zig_version}" >> "$GITHUB_PATH"
+          echo "$PWD/zig-${zig_arch}-macos-${zig_version}" >> "$GITHUB_PATH"
 
       - name: Build GhosttyKit xcframework
         run: |
