@@ -28,5 +28,37 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Install Zig required by Ghostty
+        run: |
+          set -euo pipefail
+
+          zig_version="$(sed -n 's/.*minimum_zig_version = \"\\([^\"]*\\)\".*/\\1/p' ghostty/build.zig.zon)"
+          if [ -z "$zig_version" ]; then
+            echo "Failed to determine Ghostty Zig version" >&2
+            exit 1
+          fi
+
+          case "$(uname -m)" in
+            arm64)
+              zig_arch="aarch64"
+              ;;
+            x86_64)
+              zig_arch="x86_64"
+              ;;
+            *)
+              echo "Unsupported macOS runner architecture: $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+
+          curl -L "https://ziglang.org/download/${zig_version}/zig-macos-${zig_arch}-${zig_version}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz
+          echo "$PWD/zig-macos-${zig_arch}-${zig_version}" >> "$GITHUB_PATH"
+
+      - name: Build GhosttyKit xcframework
+        run: |
+          zig build -Demit-xcframework=true -Demit-macos-app=false
+        working-directory: ghostty
+
       - name: Run Swift package tests
         run: swift test
