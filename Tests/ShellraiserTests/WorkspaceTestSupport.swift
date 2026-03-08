@@ -101,6 +101,16 @@ class WorkspaceTestCase: XCTestCase {
         return leaf.surfaces.first
     }
 
+    /// Returns a specific surface by identifier anywhere in the pane tree.
+    func surface(in rootPane: PaneNodeModel, surfaceId: UUID) -> SurfaceModel? {
+        switch rootPane {
+        case .leaf(let leaf):
+            return leaf.surfaces.first(where: { $0.id == surfaceId })
+        case .split(let split):
+            return surface(in: split.first, surfaceId: surfaceId) ?? surface(in: split.second, surfaceId: surfaceId)
+        }
+    }
+
     /// Creates a workspace manager with controllable test doubles.
     @MainActor
     func makeWorkspaceManager(
