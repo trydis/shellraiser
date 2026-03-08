@@ -89,7 +89,7 @@ jobs:
       - name: Build GhosttyKit xcframework
         if: steps.ghostty-cache.outputs.cache-hit != 'true'
         run: |
-          zig build -Demit-xcframework=true -Demit-macos-app=false -Dxcframework-target=native
+          zig build -Demit-xcframework=true -Doptimize=ReleaseFast
         working-directory: ghostty
 
       - name: Run Swift package tests
