@@ -2,14 +2,46 @@ import Foundation
 
 /// Filesystem-backed persistence for workspace layout state.
 final class WorkspacePersistence {
+    /// Environment variable used to force a dedicated Application Support subdirectory.
+    static let appSupportSubdirectoryEnvironmentKey = "SHELLRAISER_APP_SUPPORT_SUBDIRECTORY"
+
     private let fileManager = FileManager.default
     private let workspaceFileURL: URL
 
     /// Creates persistence rooted under Application Support.
     init() {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDirectory = appSupport.appendingPathComponent("Shellraiser", isDirectory: true)
+        let appDirectory = appSupport.appendingPathComponent(
+            Self.appSupportSubdirectory(),
+            isDirectory: true
+        )
         workspaceFileURL = appDirectory.appendingPathComponent("workspaces.json")
+    }
+
+    /// Resolves the Application Support subdirectory for the current app instance.
+    private static func appSupportSubdirectory() -> String {
+        let environment = ProcessInfo.processInfo.environment
+        if let override = environment[appSupportSubdirectoryEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            return override
+        }
+
+        let defaultBundleIdentifier = "com.shellraiser.app"
+        if let bundleIdentifier = Bundle.main.bundleIdentifier,
+           bundleIdentifier != defaultBundleIdentifier {
+            return sanitizedAppSupportSubdirectory(for: bundleIdentifier)
+        }
+
+        return "Shellraiser"
+    }
+
+    /// Produces a filesystem-friendly Application Support subdirectory name.
+    private static func sanitizedAppSupportSubdirectory(for bundleIdentifier: String) -> String {
+        let sanitizedIdentifier = bundleIdentifier.map { character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        return "Shellraiser-\(String(sanitizedIdentifier))"
     }
 
     /// Loads serialized workspaces from disk.

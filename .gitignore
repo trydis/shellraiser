@@ -13,7 +13,8 @@ Package.resolved
 # Xcode and Apple build artifacts
 DerivedData/
 build/
-.xcodebuild/
+.xcodebuild*/
+dist/
 *.app
 *.dSYM/
 *.dSYM.zip
