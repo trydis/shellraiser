@@ -158,4 +158,134 @@ final class WorkspaceSurfaceManagerSurfaceStateTests: WorkspaceTestCase {
         XCTAssertEqual(resolvedSurface?.title, "~")
         XCTAssertEqual(persistence.load(), workspaces)
     }
+
+    /// Verifies re-enqueuing an already pending surface refreshes metadata without advancing queue identity.
+    func testMarkPendingCompletionDoesNotReenqueueAlreadyPendingSurface() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let originalTimestamp = Date(timeIntervalSince1970: 1_700_001_600)
+        let refreshTimestamp = Date(timeIntervalSince1970: 1_700_001_700)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000941")!,
+            title: "Already Pending",
+            agentType: .claudeCode,
+            isIdle: true,
+            hasUnreadIdleNotification: false,
+            hasPendingCompletion: true,
+            pendingCompletionSequence: 9,
+            lastCompletionAt: originalTimestamp
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000942")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000943")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        let didEnqueue = manager.markPendingCompletion(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            agentType: .codex,
+            sequence: 99,
+            timestamp: refreshTimestamp,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        let updatedSurface = self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertFalse(didEnqueue)
+        XCTAssertEqual(updatedSurface?.agentType, .codex)
+        XCTAssertTrue(updatedSurface?.hasPendingCompletion ?? false)
+        XCTAssertEqual(updatedSurface?.pendingCompletionSequence, 9)
+        XCTAssertTrue(updatedSurface?.hasUnreadIdleNotification ?? false)
+        XCTAssertEqual(updatedSurface?.lastCompletionAt, refreshTimestamp)
+    }
+
+    /// Verifies unchanged agent-type and title updates do not write persistence side effects.
+    func testNoOpSetAgentTypeAndTitleDoNotPersist() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000951")!,
+            title: "Stable",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000952")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000953")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.setAgentType(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            agentType: .codex,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+        manager.setSurfaceTitle(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            title: "Stable",
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        XCTAssertNil(persistence.load())
+    }
+
+    /// Verifies clearing unread state and unchanged idle updates behave as expected.
+    func testClearUnreadNotificationPersistsAndUnchangedIdleStateStaysInMemoryOnly() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let originalActivity = Date(timeIntervalSince1970: 1_700_001_800)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000961")!,
+            title: "Unread",
+            isIdle: false,
+            hasUnreadIdleNotification: true,
+            lastActivity: originalActivity
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000962")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000963")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.clearUnreadNotification(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+        XCTAssertFalse(self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)?.hasUnreadIdleNotification ?? true)
+        XCTAssertEqual(persistence.load(), workspaces)
+
+        try? FileManager.default.removeItem(
+            at: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent(ProcessInfo.processInfo.environment[WorkspacePersistence.appSupportSubdirectoryEnvironmentKey]!, isDirectory: true)
+        )
+
+        manager.setIdleState(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            isIdle: false,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        XCTAssertNotEqual(self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)?.lastActivity, originalActivity)
+        XCTAssertNil(persistence.load())
+    }
 }

@@ -232,4 +232,85 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertFalse(surface(in: manager.workspaces[1].rootPane, paneId: targetPaneId)?.hasPendingCompletion ?? true)
         XCTAssertEqual(manager.pendingCompletionTargets().map(\.surface.id), [otherSurface.id])
     }
+
+    /// Verifies handled completion highlights move from hold to fade and then expire.
+    func testCompletionHighlightStateReturnsRecentHoldRecentFadeAndThenNone() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001151")!,
+            title: "Handled"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001152")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001153")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        let now = Date()
+        manager.recentlyHandledSurfaceFadeStarts[surface.id] = now.addingTimeInterval(5)
+        manager.recentlyHandledSurfaceExpirations[surface.id] = now.addingTimeInterval(6.2)
+        if case .recentHold = manager.completionHighlightState(workspaceId: workspaceId, paneId: paneId) {
+        } else {
+            XCTFail("Expected recent hold highlight state.")
+        }
+
+        manager.recentlyHandledSurfaceFadeStarts[surface.id] = now.addingTimeInterval(-1)
+        manager.recentlyHandledSurfaceExpirations[surface.id] = now.addingTimeInterval(1)
+        if case .recentFade = manager.completionHighlightState(workspaceId: workspaceId, paneId: paneId) {
+        } else {
+            XCTFail("Expected recent fade highlight state.")
+        }
+
+        manager.recentlyHandledSurfaceFadeStarts[surface.id] = now.addingTimeInterval(-10)
+        manager.recentlyHandledSurfaceExpirations[surface.id] = now.addingTimeInterval(-1)
+        if case .none = manager.completionHighlightState(workspaceId: workspaceId, paneId: paneId) {
+        } else {
+            XCTFail("Expected no highlight state after expiration.")
+        }
+        XCTAssertTrue(manager.recentlyHandledSurfaceFadeStarts.isEmpty)
+        XCTAssertTrue(manager.recentlyHandledSurfaceExpirations.isEmpty)
+    }
+
+    /// Verifies queue-position lookup returns nil when the pane is not part of the pending queue.
+    func testPendingCompletionQueuePositionReturnsNilForUnknownPaneOrEmptyQueue() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001161")!,
+            title: "Only"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001162")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001163")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        XCTAssertNil(manager.pendingCompletionQueuePosition(workspaceId: workspaceId, paneId: paneId))
+
+        _ = manager.surfaceManager.markPendingCompletion(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            agentType: .codex,
+            sequence: 1,
+            timestamp: Date(timeIntervalSince1970: 1_700_004_900),
+            workspaces: &manager.workspaces,
+            persistence: manager.persistence
+        )
+
+        XCTAssertNil(
+            manager.pendingCompletionQueuePosition(
+                workspaceId: workspaceId,
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000001199")!
+            )
+        )
+    }
 }
