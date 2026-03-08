@@ -30,6 +30,25 @@ final class GhosttyRuntime {
         case selection
     }
 
+    /// Decoded clipboard payload item imported from libghostty.
+    struct ClipboardContent {
+        let mime: String
+        let data: String
+
+        /// Converts a C clipboard payload into a Swift value when both fields are valid UTF-8.
+        static func from(content: ghostty_clipboard_content_s) -> ClipboardContent? {
+            guard let mimePointer = content.mime,
+                  let dataPointer = content.data else {
+                return nil
+            }
+
+            return ClipboardContent(
+                mime: String(cString: mimePointer),
+                data: String(cString: dataPointer)
+            )
+        }
+    }
+
     /// Visual styling used to dim unfocused split panes.
     struct UnfocusedSplitStyle {
         let overlayOpacity: Double
@@ -519,11 +538,12 @@ final class GhosttyRuntime {
                     request: request
                 )
             },
-            write_clipboard_cb: { userdata, text, clipboard, confirm in
+            write_clipboard_cb: { userdata, clipboard, content, contentCount, confirm in
                 GhosttyRuntime.writeClipboard(
                     userdata: userdata,
-                    text: text,
                     clipboard: clipboard,
+                    content: content,
+                    contentCount: contentCount,
                     confirm: confirm
                 )
             },
@@ -609,21 +629,30 @@ final class GhosttyRuntime {
         }
     }
 
-    /// Writes terminal-provided text to the host pasteboard.
+    /// Writes terminal-provided clipboard content to the host pasteboard.
     nonisolated private static func writeClipboard(
         userdata: UnsafeMutableRawPointer?,
-        text: UnsafePointer<CChar>?,
         clipboard: ghostty_clipboard_e,
+        content: UnsafePointer<ghostty_clipboard_content_s>?,
+        contentCount: Int,
         confirm: Bool
     ) {
+        guard !confirm else { return }
         guard let target = clipboardTarget(from: clipboard),
               let pasteboard = pasteboard(for: target),
-              let text else {
+              let content,
+              contentCount > 0 else {
             return
         }
 
-        guard !confirm else { return }
-        let string = String(cString: text)
+        let items = (0..<contentCount).compactMap { index in
+            ClipboardContent.from(content: content[index])
+        }
+        guard let string = items.first(where: { $0.mime.hasPrefix("text/plain") })?.data
+            ?? items.first?.data else {
+            return
+        }
+
         Task { @MainActor in
             pasteboard.clearContents()
             pasteboard.setString(string, forType: .string)
