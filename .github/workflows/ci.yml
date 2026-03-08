@@ -28,7 +28,8 @@ jobs:
           swift --version
           xcodebuild -version
 
-      - name: Install Zig required by Ghostty
+      - name: Determine Ghostty build metadata
+        id: ghostty-meta
         run: |
           set -euo pipefail
 
@@ -51,13 +52,44 @@ jobs:
               ;;
           esac
 
-          curl -L "https://ziglang.org/download/${zig_version}/zig-${zig_arch}-macos-${zig_version}.tar.xz" -o zig.tar.xz
+          echo "zig_version=$zig_version" >> "$GITHUB_OUTPUT"
+          echo "zig_arch=$zig_arch" >> "$GITHUB_OUTPUT"
+          echo "zig_dir=$PWD/zig-${zig_arch}-macos-${zig_version}" >> "$GITHUB_OUTPUT"
+          echo "ghostty_sha=$(git -C ghostty rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.ghostty-meta.outputs.zig_dir }}
+          key: ${{ runner.os }}-${{ steps.ghostty-meta.outputs.zig_arch }}-zig-${{ steps.ghostty-meta.outputs.zig_version }}
+
+      - name: Install Zig required by Ghostty
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -L "https://ziglang.org/download/${{ steps.ghostty-meta.outputs.zig_version }}/zig-${{ steps.ghostty-meta.outputs.zig_arch }}-macos-${{ steps.ghostty-meta.outputs.zig_version }}.tar.xz" -o zig.tar.xz
           tar -xf zig.tar.xz
-          echo "$PWD/zig-${zig_arch}-macos-${zig_version}" >> "$GITHUB_PATH"
+
+      - name: Add Zig to PATH
+        run: echo "${{ steps.ghostty-meta.outputs.zig_dir }}" >> "$GITHUB_PATH"
+
+      - name: Cache Ghostty build outputs
+        id: ghostty-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ghostty/.zig-cache
+            ghostty/zig-out
+            ghostty/macos/GhosttyKit.xcframework
+          key: ${{ runner.os }}-${{ steps.ghostty-meta.outputs.zig_arch }}-ghostty-${{ steps.ghostty-meta.outputs.zig_version }}-${{ steps.ghostty-meta.outputs.ghostty_sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.ghostty-meta.outputs.zig_arch }}-ghostty-${{ steps.ghostty-meta.outputs.zig_version }}-
 
       - name: Build GhosttyKit xcframework
+        if: steps.ghostty-cache.outputs.cache-hit != 'true'
         run: |
-          zig build -Demit-xcframework=true -Demit-macos-app=false
+          zig build -Demit-xcframework=true -Demit-macos-app=false -Dxcframework-target=native
         working-directory: ghostty
 
       - name: Run Swift package tests
