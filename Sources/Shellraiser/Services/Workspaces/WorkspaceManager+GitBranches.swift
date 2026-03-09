@@ -34,9 +34,12 @@ extension WorkspaceManager {
         let requestedWorkingDirectory = workingDirectory
         let gitStateResolver = self.gitStateResolver
 
-        return Task.detached(priority: .utility) {
-            let gitState = gitStateResolver(requestedWorkingDirectory)
-            await self.applyResolvedGitState(
+        return Task(priority: .utility) {
+            let gitState = await Task.detached(priority: .utility) {
+                gitStateResolver(requestedWorkingDirectory)
+            }.value
+
+            self.applyResolvedGitState(
                 gitState,
                 workspaceId: workspaceId,
                 surfaceId: surfaceId,
