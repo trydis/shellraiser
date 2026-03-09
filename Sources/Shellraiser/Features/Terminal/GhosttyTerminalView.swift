@@ -23,8 +23,47 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
 /// Runtime contract used by terminal host syncing and tests.
 @MainActor
 protocol GhosttyTerminalRuntimeControlling: AnyObject {
+    func attachHost(surfaceId: UUID)
+    func detachHost(surfaceId: UUID)
     func setSurfaceFocus(surfaceId: UUID, focused: Bool)
     func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: any GhosttyFocusableHost)
+}
+
+/// Wrapper AppKit view used to give each SwiftUI representable its own NSView instance.
+@MainActor
+final class GhosttyTerminalContainerView: NSView {
+    private(set) var mountedSurfaceId: UUID?
+
+    /// Creates an empty container ready to host a shared terminal surface view.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Mounts a shared host view into this container and keeps it sized to fill the pane.
+    func mountHostView(_ hostView: NSView, surfaceId: UUID) {
+        subviews
+            .filter { $0 !== hostView }
+            .forEach { $0.removeFromSuperview() }
+
+        if hostView.superview !== self {
+            hostView.removeFromSuperview()
+            addSubview(hostView)
+        }
+
+        hostView.frame = bounds
+        hostView.autoresizingMask = [.width, .height]
+        mountedSurfaceId = surfaceId
+    }
+
+    /// Clears tracked mount metadata when SwiftUI tears down this representable instance.
+    func clearMountedSurface() {
+        mountedSurfaceId = nil
+    }
 }
 
 /// Terminal panel view that embeds libghostty when available.
@@ -42,6 +81,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
     /// Builds the AppKit surface host.
     func makeNSView(context: Context) -> NSView {
         #if canImport(GhosttyKit)
+        let containerView = GhosttyTerminalContainerView(frame: .zero)
         let hostView = GhosttyRuntime.shared.acquireHostView(
             surfaceModel: surface,
             terminalConfig: config,
@@ -52,8 +92,21 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
-        GhosttyRuntime.shared.setSurfaceFocus(surfaceId: surface.id, focused: isFocused)
-        return hostView
+        Self.syncContainerView(
+            containerView,
+            host: hostView,
+            runtime: GhosttyRuntime.shared,
+            surface: surface,
+            config: config,
+            isFocused: isFocused,
+            onActivate: onActivate,
+            onIdleNotification: onIdleNotification,
+            onUserInput: onUserInput,
+            onTitleChange: onTitleChange,
+            onChildExited: onChildExited,
+            onPaneNavigationRequest: onPaneNavigationRequest
+        )
+        return containerView
         #else
         let text = NSTextField(labelWithString: "GhosttyKit is not linked in this build.")
         text.textColor = .secondaryLabelColor
@@ -64,9 +117,20 @@ struct GhosttyTerminalView: NSViewRepresentable {
     /// Updates the host surface with latest model values.
     func updateNSView(_ nsView: NSView, context: Context) {
         #if canImport(GhosttyKit)
-        guard let host = nsView as? (NSView & GhosttyTerminalHostView) else { return }
-        Self.syncHostView(
-            host,
+        guard let container = nsView as? GhosttyTerminalContainerView else { return }
+        let host = GhosttyRuntime.shared.acquireHostView(
+            surfaceModel: surface,
+            terminalConfig: config,
+            onActivate: onActivate,
+            onIdleNotification: onIdleNotification,
+            onUserInput: onUserInput,
+            onTitleChange: onTitleChange,
+            onChildExited: onChildExited,
+            onPaneNavigationRequest: onPaneNavigationRequest
+        )
+        Self.syncContainerView(
+            container,
+            host: host,
             runtime: GhosttyRuntime.shared,
             surface: surface,
             config: config,
@@ -84,9 +148,57 @@ struct GhosttyTerminalView: NSViewRepresentable {
     /// Detaches host views when SwiftUI unmounts this representable.
     static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
         #if canImport(GhosttyKit)
-        guard let host = nsView as? LibghosttySurfaceView else { return }
-        GhosttyRuntime.shared.detachHost(surfaceId: host.surfaceId)
+        guard let container = nsView as? GhosttyTerminalContainerView else { return }
+        Self.dismantleContainerView(container, runtime: GhosttyRuntime.shared)
         #endif
+    }
+
+    /// Synchronizes a representable-owned container with the shared terminal host view.
+    static func syncContainerView(
+        _ container: GhosttyTerminalContainerView,
+        host: NSView & GhosttyTerminalHostView,
+        runtime: any GhosttyTerminalRuntimeControlling,
+        surface: SurfaceModel,
+        config: TerminalPanelConfig,
+        isFocused: Bool,
+        onActivate: @escaping () -> Void,
+        onIdleNotification: @escaping () -> Void,
+        onUserInput: @escaping () -> Void,
+        onTitleChange: @escaping (String) -> Void,
+        onChildExited: @escaping () -> Void,
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+    ) {
+        if container.mountedSurfaceId != surface.id {
+            if let mountedSurfaceId = container.mountedSurfaceId {
+                runtime.detachHost(surfaceId: mountedSurfaceId)
+            }
+            runtime.attachHost(surfaceId: surface.id)
+        }
+
+        container.mountHostView(host, surfaceId: surface.id)
+        syncHostView(
+            host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: isFocused,
+            onActivate: onActivate,
+            onIdleNotification: onIdleNotification,
+            onUserInput: onUserInput,
+            onTitleChange: onTitleChange,
+            onChildExited: onChildExited,
+            onPaneNavigationRequest: onPaneNavigationRequest
+        )
+    }
+
+    /// Detaches the mounted surface from a wrapper container during teardown.
+    static func dismantleContainerView(
+        _ container: GhosttyTerminalContainerView,
+        runtime: any GhosttyTerminalRuntimeControlling
+    ) {
+        guard let surfaceId = container.mountedSurfaceId else { return }
+        runtime.detachHost(surfaceId: surfaceId)
+        container.clearMountedSurface()
     }
 
     /// Synchronizes an existing host view with current surface state and focus routing.
