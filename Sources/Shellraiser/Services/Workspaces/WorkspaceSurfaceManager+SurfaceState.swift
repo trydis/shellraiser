@@ -171,4 +171,30 @@ extension WorkspaceSurfaceManager {
             persistence.save(workspaces)
         }
     }
+
+    /// Updates the reported working directory for a surface when the terminal changes directories.
+    func setSurfaceWorkingDirectory(
+        workspaceId: UUID,
+        surfaceId: UUID,
+        workingDirectory: String,
+        workspaces: inout [WorkspaceModel],
+        persistence: WorkspacePersistence
+    ) {
+        let normalizedWorkingDirectory = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedWorkingDirectory.isEmpty else { return }
+
+        var didChange = false
+
+        mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
+            _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
+                guard surface.terminalConfig.workingDirectory != normalizedWorkingDirectory else { return }
+                surface.terminalConfig.workingDirectory = normalizedWorkingDirectory
+                didChange = true
+            }
+        }
+
+        if didChange {
+            persistence.save(workspaces)
+        }
+    }
 }

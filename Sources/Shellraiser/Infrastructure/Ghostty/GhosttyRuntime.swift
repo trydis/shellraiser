@@ -22,12 +22,14 @@ final class GhosttyRuntime {
     enum SurfaceActionEvent {
         case idleNotification
         case title(String)
+        case workingDirectory(String)
         case childExited
     }
 
     struct SurfaceCallbacks {
         let onIdleNotification: () -> Void
         let onTitleChange: (String) -> Void
+        let onWorkingDirectoryChange: (String) -> Void
         let onChildExited: () -> Void
     }
 
@@ -94,11 +96,13 @@ final class GhosttyRuntime {
         surfaceId: UUID,
         onIdleNotification: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void
     ) {
         callbacksBySurfaceId[surfaceId] = SurfaceCallbacks(
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited
         )
     }
@@ -111,6 +115,7 @@ final class GhosttyRuntime {
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) -> LibghosttySurfaceView {
@@ -118,6 +123,7 @@ final class GhosttyRuntime {
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited
         )
         releasedSurfaceIds.remove(surfaceModel.id)
@@ -130,6 +136,7 @@ final class GhosttyRuntime {
                 onIdleNotification: onIdleNotification,
                 onUserInput: onUserInput,
                 onTitleChange: onTitleChange,
+                onWorkingDirectoryChange: onWorkingDirectoryChange,
                 onChildExited: onChildExited,
                 onPaneNavigationRequest: onPaneNavigationRequest
             )
@@ -143,6 +150,7 @@ final class GhosttyRuntime {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -730,6 +738,16 @@ final class GhosttyRuntime {
                 return true
             }
             return true
+        case GHOSTTY_ACTION_PWD:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let rawWorkingDirectory = action.action.pwd.pwd else { return true }
+            let surfaceKey = UInt(bitPattern: surface)
+            event = .workingDirectory(String(cString: rawWorkingDirectory))
+            DispatchQueue.main.async {
+                runtime.handleAction(surfaceKey: surfaceKey, event: event!)
+            }
+            return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             guard target.tag == GHOSTTY_TARGET_SURFACE,
                   let surface = target.target.surface else { return false }
@@ -960,6 +978,8 @@ final class GhosttyRuntime {
             callbacks.onIdleNotification()
         case .title(let title):
             callbacks.onTitleChange(title)
+        case .workingDirectory(let workingDirectory):
+            callbacks.onWorkingDirectoryChange(workingDirectory)
         case .childExited:
             callbacks.onChildExited()
         }

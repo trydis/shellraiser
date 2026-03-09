@@ -15,6 +15,7 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     )
@@ -75,6 +76,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
     let onIdleNotification: () -> Void
     let onUserInput: () -> Void
     let onTitleChange: (String) -> Void
+    let onWorkingDirectoryChange: (String) -> Void
     let onChildExited: () -> Void
     let onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
 
@@ -89,6 +91,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -103,6 +106,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -125,6 +129,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -139,6 +144,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -165,6 +171,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -186,6 +193,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )
@@ -212,6 +220,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -222,6 +231,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onIdleNotification: onIdleNotification,
             onUserInput: onUserInput,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest
         )

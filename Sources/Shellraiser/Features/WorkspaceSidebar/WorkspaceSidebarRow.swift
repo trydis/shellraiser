@@ -5,6 +5,7 @@ struct WorkspaceSidebarRow: View {
     let workspace: WorkspaceModel
     let displayIndex: Int
     let isSelected: Bool
+    let focusedBranchName: String?
     let pendingCount: Int
     let onSelect: () -> Void
     let onRename: () -> Void
@@ -41,6 +42,9 @@ struct WorkspaceSidebarRow: View {
                     HStack(spacing: 8) {
                         StatPill(title: "P", value: "\(paneCount)")
                         StatPill(title: "T", value: "\(surfaceCount)")
+                        if let focusedBranchName {
+                            BranchChip(branchName: focusedBranchName)
+                        }
                         if pendingCount > 0 {
                             StatPill(title: "Q", value: "\(pendingCount)", emphasized: true)
                         }
@@ -90,5 +94,34 @@ struct WorkspaceSidebarRow: View {
         case .split(let split):
             return paneCount(for: split.first) + paneCount(for: split.second)
         }
+    }
+}
+
+/// Compact Git branch chip shown for the focused surface inside a workspace row.
+private struct BranchChip: View {
+    let branchName: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(AppTheme.highlight)
+
+            Text(branchName)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(AppTheme.stroke, lineWidth: 1)
+        )
     }
 }

@@ -17,6 +17,7 @@ extension WorkspaceManager {
             persistence: persistence
         )
         synchronizePendingCompletionCursor()
+        refreshFocusedWorkspaceGitBranches()
         hasLoadedPersistedWorkspaces = true
     }
 
@@ -62,6 +63,7 @@ extension WorkspaceManager {
         releasedSurfaceIds.forEach {
             completionNotifications.removeNotifications(for: $0)
             GhosttyRuntime.shared.releaseSurface(surfaceId: $0)
+            clearGitBranch(surfaceId: $0)
         }
     }
 

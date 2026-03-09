@@ -13,6 +13,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     private var onIdleNotification: () -> Void
     private var onUserInput: () -> Void
     private var onTitleChange: (String) -> Void
+    private var onWorkingDirectoryChange: (String) -> Void
     private var onChildExited: () -> Void
     private var onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
     private var markedText = NSMutableAttributedString()
@@ -33,6 +34,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -42,6 +44,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.onIdleNotification = onIdleNotification
         self.onUserInput = onUserInput
         self.onTitleChange = onTitleChange
+        self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
         self.onPaneNavigationRequest = onPaneNavigationRequest
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
@@ -57,6 +60,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited
         )
         surfaceHandle = GhosttyRuntime.shared.createSurface(
@@ -420,6 +424,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -429,6 +434,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.onIdleNotification = onIdleNotification
         self.onUserInput = onUserInput
         self.onTitleChange = onTitleChange
+        self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
         self.onPaneNavigationRequest = onPaneNavigationRequest
 
@@ -436,6 +442,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited
         )
         applyGhosttyBackgroundStyle()

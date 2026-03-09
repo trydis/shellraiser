@@ -54,6 +54,8 @@
 		A1000047 /* ShellraiserScriptCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047; };
 		A1000048 /* WorkspaceManager+AppleScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048; };
 		A1000049 /* ShellraiserScripting.xml in Resources */ = {isa = PBXBuildFile; fileRef = A2000049; };
+		A1000050 /* GitBranchResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050; };
+		A1000051 /* WorkspaceManager+GitBranches.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000051; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -104,6 +106,8 @@
 		A2000047 /* ShellraiserScriptCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/AppleScript/ShellraiserScriptCommands.swift; sourceTree = "<group>"; };
 		A2000048 /* WorkspaceManager+AppleScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Infrastructure/AppleScript/WorkspaceManager+AppleScript.swift"; sourceTree = "<group>"; };
 		A2000049 /* ShellraiserScripting.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Infrastructure/AppleScript/ShellraiserScripting.xml; sourceTree = "<group>"; };
+		A2000050 /* GitBranchResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Git/GitBranchResolver.swift; sourceTree = "<group>"; };
+		A2000051 /* WorkspaceManager+GitBranches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/Workspaces/WorkspaceManager+GitBranches.swift"; sourceTree = "<group>"; };
 		A3000001 /* Shellraiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shellraiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -150,6 +154,7 @@
 				A2000025 /* WorkspaceManager+Shortcuts.swift */,
 				A2000026 /* WorkspaceManager+Completions.swift */,
 				A2000027 /* WorkspaceManager+CommandPalette.swift */,
+				A2000051 /* WorkspaceManager+GitBranches.swift */,
 				A2000009 /* WorkspaceCatalogManager.swift */,
 				A2000011 /* WorkspaceSurfaceManager.swift */,
 				A2000042 /* WorkspaceSurfaceManager+PaneOperations.swift */,
@@ -166,6 +171,7 @@
 				A2000008 /* GhosttyTerminalView.swift */,
 				A2000012 /* LibghosttySurfaceView.swift */,
 				A2000013 /* GhosttyRuntime.swift */,
+				A2000050 /* GitBranchResolver.swift */,
 				A2000044 /* AgentRuntimeInterfaces.swift */,
 				A2000032 /* CompletionDebugLogger.swift */,
 				A2000033 /* CompletionModels.swift */,
@@ -285,6 +291,7 @@
 				A1000025 /* WorkspaceManager+Shortcuts.swift in Sources */,
 				A1000026 /* WorkspaceManager+Completions.swift in Sources */,
 				A1000027 /* WorkspaceManager+CommandPalette.swift in Sources */,
+				A1000051 /* WorkspaceManager+GitBranches.swift in Sources */,
 				A1000005 /* WorkspacePersistence.swift in Sources */,
 				A1000006 /* WorkspaceListView.swift in Sources */,
 				A1000030 /* WorkspaceSidebarRow.swift in Sources */,
@@ -301,6 +308,7 @@
 				A1000043 /* WorkspaceSurfaceManager+SurfaceState.swift in Sources */,
 				A1000012 /* LibghosttySurfaceView.swift in Sources */,
 				A1000013 /* GhosttyRuntime.swift in Sources */,
+				A1000050 /* GitBranchResolver.swift in Sources */,
 				A1000044 /* AgentRuntimeInterfaces.swift in Sources */,
 				A1000032 /* CompletionDebugLogger.swift in Sources */,
 				A1000033 /* CompletionModels.swift in Sources */,

@@ -241,6 +241,66 @@ final class WorkspaceSurfaceManagerSurfaceStateTests: WorkspaceTestCase {
         XCTAssertNil(persistence.load())
     }
 
+    /// Verifies working-directory updates persist when the reported pwd changes.
+    func testSetSurfaceWorkingDirectoryPersistsChangedPath() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000971")!,
+            title: "Repo",
+            lastActivity: Date(timeIntervalSince1970: 1_700_001_900)
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000972")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000973")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.setSurfaceWorkingDirectory(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            workingDirectory: "/tmp/project",
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        XCTAssertEqual(self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)?.terminalConfig.workingDirectory, "/tmp/project")
+        XCTAssertEqual(persistence.load(), workspaces)
+    }
+
+    /// Verifies unchanged working-directory reports do not persist redundant state.
+    func testSetSurfaceWorkingDirectoryNoOpDoesNotPersist() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000981")!,
+            title: "Stable"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000982")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000983")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.setSurfaceWorkingDirectory(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            workingDirectory: "/tmp",
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        XCTAssertNil(persistence.load())
+    }
+
     /// Verifies clearing unread state and unchanged idle updates behave as expected.
     func testClearUnreadNotificationPersistsAndUnchangedIdleStateStaysInMemoryOnly() {
         let persistence = makePersistence()

@@ -27,6 +27,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -62,6 +63,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -76,6 +78,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -112,6 +115,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -144,6 +148,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -152,6 +157,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         _ = onIdleNotification
         _ = onUserInput
         _ = onTitleChange
+        _ = onWorkingDirectoryChange
         _ = onChildExited
         _ = onPaneNavigationRequest
         updatedSurfaceIds.append(surfaceModel.id)
