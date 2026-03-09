@@ -966,13 +966,14 @@ final class GhosttyRuntime {
     /// handing execution to the requested shell.
     static func launchCommand(for terminalConfig: TerminalPanelConfig) -> String {
         let shell = terminalConfig.shell.shellEscaped
-        let workingDirectory = terminalConfig.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedWorkingDirectory = terminalConfig.workingDirectory
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !workingDirectory.isEmpty else {
+        guard !trimmedWorkingDirectory.isEmpty else {
             return shell
         }
 
-        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(shell)"
+        let script = "cd -- \(terminalConfig.workingDirectory.shellEscaped) || exit $?; exec \(shell)"
         return "\("/bin/sh".shellEscaped) -lc \(script.shellEscaped)"
     }
 

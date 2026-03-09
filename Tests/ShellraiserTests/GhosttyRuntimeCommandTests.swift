@@ -18,4 +18,16 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         XCTAssertTrue(command.contains("/tmp/project"))
         XCTAssertTrue(command.contains("/bin/zsh"))
     }
+
+    /// Verifies working-directory wrapper preserves significant leading and trailing spaces.
+    func testLaunchCommandPreservesUntrimmedWorkingDirectoryInWrapper() {
+        let config = TerminalPanelConfig(
+            workingDirectory: "  /tmp/project with spaces  ",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        let command = GhosttyRuntime.launchCommand(for: config)
+        XCTAssertTrue(command.contains("  /tmp/project with spaces  "))
+    }
 }
