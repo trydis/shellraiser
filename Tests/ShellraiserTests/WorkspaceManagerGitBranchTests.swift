@@ -76,16 +76,14 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
     }
 
     /// Verifies manager-level pwd updates normalize the path before persisting and refreshing Git state.
-    func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() async throws {
-        let repositoryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let gitDirectory = repositoryDirectory.appendingPathComponent(".git", isDirectory: true)
-        try FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: true)
-        try "ref: refs/heads/main\n".write(to: gitDirectory.appendingPathComponent("HEAD"), atomically: true, encoding: .utf8)
-        addTeardownBlock {
-            try? FileManager.default.removeItem(at: repositoryDirectory)
-        }
-
-        let manager = makeWorkspaceManager()
+    func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() async {
+        let normalizedWorkingDirectory = "/tmp/repo"
+        let expectedState = ResolvedGitState(branchName: "main", isLinkedWorktree: false)
+        let manager = makeWorkspaceManager(
+            gitStateResolver: { workingDirectory in
+                workingDirectory == normalizedWorkingDirectory ? expectedState : nil
+            }
+        )
         let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001321")!)
         let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001322")!
         let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001323")!
@@ -100,17 +98,16 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
         let refreshTask = manager.setSurfaceWorkingDirectory(
             workspaceId: workspaceId,
             surfaceId: surface.id,
-            workingDirectory: "\(repositoryDirectory.path)\n"
+            workingDirectory: "\(normalizedWorkingDirectory)\n"
         )
 
         XCTAssertEqual(
             manager.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)?.terminalConfig.workingDirectory,
-            repositoryDirectory.path
+            normalizedWorkingDirectory
         )
 
         await refreshTask?.value
 
-        let expectedState = ResolvedGitState(branchName: "main", isLinkedWorktree: false)
         XCTAssertEqual(manager.gitStatesBySurfaceId[surface.id], expectedState)
     }
 }

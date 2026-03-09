@@ -43,6 +43,9 @@ struct WorkspaceRenameRequest: Identifiable {
 /// Central app-state manager for window, workspace, pane, and surface operations.
 @MainActor
 final class WorkspaceManager: ObservableObject {
+    /// Callable resolver used to derive Git state from a working directory.
+    typealias GitStateResolver = @Sendable (String) -> ResolvedGitState?
+
     /// App-owned commands that operate on the focused pane and its active tab.
     enum FocusedPaneCommand {
         case newSurface
@@ -75,6 +78,7 @@ final class WorkspaceManager: ObservableObject {
     let runtimeBridge: any AgentRuntimeSupporting
     let completionNotifications: any AgentCompletionNotificationManaging
     let completionEventMonitor: any AgentCompletionEventMonitoring
+    let gitStateResolver: GitStateResolver
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
@@ -88,7 +92,10 @@ final class WorkspaceManager: ObservableObject {
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: (any AgentRuntimeSupporting)? = nil,
         completionNotifications: any AgentCompletionNotificationManaging = AgentCompletionNotificationManager(),
-        completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil
+        completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil,
+        gitStateResolver: @escaping GitStateResolver = {
+            GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
+        }
     ) {
         let resolvedRuntimeBridge = runtimeBridge ?? AgentRuntimeBridge.shared
         let resolvedCompletionEventMonitor = completionEventMonitor
@@ -101,6 +108,7 @@ final class WorkspaceManager: ObservableObject {
         self.completionNotifications = completionNotifications
         resolvedRuntimeBridge.prepareRuntimeSupport()
         self.completionEventMonitor = resolvedCompletionEventMonitor
+        self.gitStateResolver = gitStateResolver
 
         completionNotifications.onActivateSurface = { [weak self] surfaceId in
             Task { @MainActor in

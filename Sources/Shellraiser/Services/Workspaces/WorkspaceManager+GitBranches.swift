@@ -32,9 +32,10 @@ extension WorkspaceManager {
     @discardableResult
     func refreshGitBranch(workspaceId: UUID, surfaceId: UUID, workingDirectory: String) -> Task<Void, Never> {
         let requestedWorkingDirectory = workingDirectory
+        let gitStateResolver = self.gitStateResolver
 
         return Task.detached(priority: .utility) {
-            let gitState = GitBranchResolver().resolveGitState(forWorkingDirectory: requestedWorkingDirectory)
+            let gitState = gitStateResolver(requestedWorkingDirectory)
             await MainActor.run {
                 guard let workspace = self.workspace(id: workspaceId),
                       let surface = self.surface(in: workspace.rootPane, surfaceId: surfaceId),

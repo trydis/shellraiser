@@ -121,7 +121,10 @@ class WorkspaceTestCase: XCTestCase {
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: MockAgentRuntimeBridge? = nil,
         notifications: MockAgentCompletionNotificationManager? = nil,
-        eventMonitor: MockAgentCompletionEventMonitor? = nil
+        eventMonitor: MockAgentCompletionEventMonitor? = nil,
+        gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
+            GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
+        }
     ) -> WorkspaceManager {
         _ = NSApplication.shared
         return WorkspaceManager(
@@ -130,7 +133,8 @@ class WorkspaceTestCase: XCTestCase {
             surfaceManager: surfaceManager,
             runtimeBridge: runtimeBridge ?? MockAgentRuntimeBridge(),
             completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
-            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor()
+            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor(),
+            gitStateResolver: gitStateResolver
         )
     }
 }
