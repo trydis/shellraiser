@@ -77,6 +77,45 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
 
     /// Verifies manager-level pwd updates normalize the path before persisting and refreshing Git state.
     func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() throws {
-        throw XCTSkip("Temporarily ignored while diagnosing the CI-only failure.")
+        let normalizedWorkingDirectory = "/tmp/repo"
+        let expectedState = ResolvedGitState(branchName: "main", isLinkedWorktree: false)
+        let manager = makeWorkspaceManager(
+            gitStateResolver: { workingDirectory in
+                workingDirectory == normalizedWorkingDirectory ? expectedState : nil
+            }
+        )
+        let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001321")!)
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001322")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001323")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        let refreshTask = manager.setSurfaceWorkingDirectory(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            workingDirectory: "\(normalizedWorkingDirectory)\n"
+        )
+
+        XCTAssertEqual(
+            manager.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)?.terminalConfig.workingDirectory,
+            normalizedWorkingDirectory
+        )
+
+        let refreshCompleted = expectation(description: "Git refresh completes")
+        Task.detached {
+            await refreshTask?.value
+            await MainActor.run {
+                refreshCompleted.fulfill()
+            }
+        }
+
+        wait(for: [refreshCompleted], timeout: 1.0)
+
+        XCTAssertEqual(manager.gitStatesBySurfaceId[surface.id], expectedState)
     }
 }
