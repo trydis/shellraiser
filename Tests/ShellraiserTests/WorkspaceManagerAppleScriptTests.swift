@@ -75,58 +75,107 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         XCTAssertEqual(delegate.valueInTerminals(withUniqueID: bottomLeft.id)?.id, bottomLeft.id)
     }
 
-    /// Verifies script directions map onto the expected side-by-side and stacked pane layouts.
-    func testSplitScriptTerminalMapsDirectionsToExpectedOrientations() {
+    /// Verifies script directions map onto the expected split orientation and pane side.
+    func testSplitScriptTerminalMapsDirectionsToExpectedPlacement() {
         let manager = makeWorkspaceManager()
-        let existingSurface = makeSurface(
+        let rightSource = makeSurface(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000901")!,
-            title: "Existing"
+            title: "Right Source"
         )
-        let horizontalPaneId = UUID(uuidString: "00000000-0000-0000-0000-000000000902")!
-        let verticalPaneId = UUID(uuidString: "00000000-0000-0000-0000-000000000903")!
-        let horizontalWorkspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000904")!
-        let verticalWorkspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000905")!
+        let leftSource = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000902")!,
+            title: "Left Source"
+        )
+        let downSource = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000903")!,
+            title: "Down Source"
+        )
+        let upSource = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000904")!,
+            title: "Up Source"
+        )
 
         manager.workspaces = [
             makeWorkspace(
-                id: horizontalWorkspaceId,
-                rootPane: makeLeaf(paneId: horizontalPaneId, surfaces: [existingSurface]),
-                focusedSurfaceId: existingSurface.id
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000905")!,
+                rootPane: makeLeaf(
+                    paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000906")!,
+                    surfaces: [rightSource]
+                ),
+                focusedSurfaceId: rightSource.id
             ),
             makeWorkspace(
-                id: verticalWorkspaceId,
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000907")!,
                 rootPane: makeLeaf(
-                    paneId: verticalPaneId,
-                    surfaces: [makeSurface(
-                        id: UUID(uuidString: "00000000-0000-0000-0000-000000000906")!,
-                        title: "Existing Vertical"
-                    )]
+                    paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000908")!,
+                    surfaces: [leftSource]
                 ),
-                focusedSurfaceId: UUID(uuidString: "00000000-0000-0000-0000-000000000906")!
+                focusedSurfaceId: leftSource.id
+            ),
+            makeWorkspace(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000909")!,
+                rootPane: makeLeaf(
+                    paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000910")!,
+                    surfaces: [downSource]
+                ),
+                focusedSurfaceId: downSource.id
+            ),
+            makeWorkspace(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000911")!,
+                rootPane: makeLeaf(
+                    paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000912")!,
+                    surfaces: [upSource]
+                ),
+                focusedSurfaceId: upSource.id
             )
         ]
 
-        _ = manager.splitScriptTerminal(
-            surfaceId: existingSurface.id,
+        guard let rightTerminal = manager.splitScriptTerminal(
+            surfaceId: rightSource.id,
             direction: "right",
             configuration: nil
-        )
-
-        guard case .split(let horizontalSplit) = manager.workspaces[0].rootPane else {
-            return XCTFail("Expected right-directed script split to create a split node.")
-        }
-        XCTAssertEqual(horizontalSplit.orientation, .horizontal)
-
-        let verticalSourceSurfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000906")!
-        _ = manager.splitScriptTerminal(
-            surfaceId: verticalSourceSurfaceId,
+        ), let leftTerminal = manager.splitScriptTerminal(
+            surfaceId: leftSource.id,
+            direction: "left",
+            configuration: nil
+        ), let downTerminal = manager.splitScriptTerminal(
+            surfaceId: downSource.id,
             direction: "down",
             configuration: nil
-        )
+        ), let upTerminal = manager.splitScriptTerminal(
+            surfaceId: upSource.id,
+            direction: "up",
+            configuration: nil
+        ) else {
+            return XCTFail("Expected script splits in every direction to create terminals.")
+        }
 
-        guard case .split(let verticalSplit) = manager.workspaces[1].rootPane else {
+        guard case .split(let rightSplit) = manager.workspaces[0].rootPane else {
+            return XCTFail("Expected right-directed script split to create a split node.")
+        }
+        XCTAssertEqual(rightSplit.orientation, .horizontal)
+        XCTAssertEqual(rightSplit.first.allSurfaceIds(), [rightSource.id])
+        XCTAssertEqual(rightSplit.second.allSurfaceIds(), [UUID(uuidString: rightTerminal.id)!])
+
+        guard case .split(let leftSplit) = manager.workspaces[1].rootPane else {
+            return XCTFail("Expected left-directed script split to create a split node.")
+        }
+        XCTAssertEqual(leftSplit.orientation, .horizontal)
+        XCTAssertEqual(leftSplit.first.allSurfaceIds(), [UUID(uuidString: leftTerminal.id)!])
+        XCTAssertEqual(leftSplit.second.allSurfaceIds(), [leftSource.id])
+
+        guard case .split(let downSplit) = manager.workspaces[2].rootPane else {
             return XCTFail("Expected down-directed script split to create a split node.")
         }
-        XCTAssertEqual(verticalSplit.orientation, .vertical)
+        XCTAssertEqual(downSplit.orientation, .vertical)
+        XCTAssertEqual(downSplit.first.allSurfaceIds(), [downSource.id])
+        XCTAssertEqual(downSplit.second.allSurfaceIds(), [UUID(uuidString: downTerminal.id)!])
+
+        guard case .split(let upSplit) = manager.workspaces[3].rootPane else {
+            return XCTFail("Expected up-directed script split to create a split node.")
+        }
+        XCTAssertEqual(upSplit.orientation, .vertical)
+        XCTAssertEqual(upSplit.first.allSurfaceIds(), [UUID(uuidString: upTerminal.id)!])
+        XCTAssertEqual(upSplit.second.allSurfaceIds(), [upSource.id])
     }
 }

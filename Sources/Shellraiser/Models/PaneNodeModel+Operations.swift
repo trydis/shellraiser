@@ -135,6 +135,7 @@ extension PaneNodeModel {
     mutating func splitLeaf(
         paneId: UUID,
         orientation: SplitOrientation,
+        position: SplitChildPosition = .second,
         newSurface: SurfaceModel = SurfaceModel.makeDefault()
     ) -> UUID? {
         switch self {
@@ -150,8 +151,8 @@ extension PaneNodeModel {
                 id: UUID(),
                 orientation: orientation,
                 ratio: 0.5,
-                first: .leaf(leaf),
-                second: .leaf(secondLeaf)
+                first: position == .first ? .leaf(secondLeaf) : .leaf(leaf),
+                second: position == .first ? .leaf(leaf) : .leaf(secondLeaf)
             )
             self = .split(split)
             return newSurface.id
@@ -159,6 +160,7 @@ extension PaneNodeModel {
             if let createdSurfaceId = split.first.splitLeaf(
                 paneId: paneId,
                 orientation: orientation,
+                position: position,
                 newSurface: newSurface
             ) {
                 self = .split(split)
@@ -168,6 +170,7 @@ extension PaneNodeModel {
             if let createdSurfaceId = split.second.splitLeaf(
                 paneId: paneId,
                 orientation: orientation,
+                position: position,
                 newSurface: newSurface
             ) {
                 self = .split(split)

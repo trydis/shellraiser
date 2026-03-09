@@ -6,6 +6,12 @@ enum SplitOrientation: String, Codable, CaseIterable {
     case vertical
 }
 
+/// Position of a newly inserted pane relative to the existing pane during a split.
+enum SplitChildPosition: String, Codable, CaseIterable {
+    case first
+    case second
+}
+
 /// Leaf node in the pane tree; owns a tab strip of surfaces.
 struct PaneLeafModel: Identifiable, Codable, Equatable {
     var id: UUID

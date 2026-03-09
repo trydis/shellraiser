@@ -64,6 +64,7 @@ extension WorkspaceSurfaceManager {
         workspaceId: UUID,
         paneId: UUID,
         orientation: SplitOrientation,
+        position: SplitChildPosition = .second,
         newSurface: SurfaceModel = SurfaceModel.makeDefault(),
         workspaces: inout [WorkspaceModel],
         persistence: WorkspacePersistence
@@ -74,6 +75,7 @@ extension WorkspaceSurfaceManager {
             if let newSurfaceId = workspace.rootPane.splitLeaf(
                 paneId: paneId,
                 orientation: orientation,
+                position: position,
                 newSurface: newSurface
             ) {
                 workspace.focusedSurfaceId = newSurfaceId

@@ -129,6 +129,50 @@ final class WorkspaceSurfaceManagerPaneOperationsTests: WorkspaceTestCase {
         XCTAssertEqual(split.second.allSurfaceIds(), [createdSurface.id])
     }
 
+    /// Verifies splitting can insert the new pane before the existing pane when requested.
+    func testSplitPaneCanInsertNewSurfaceAsFirstChild() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let existingSurface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000825")!,
+            title: "Existing"
+        )
+        let createdSurface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000826")!,
+            title: "Created"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000000827")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000828")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [existingSurface]),
+                focusedSurfaceId: existingSurface.id
+            )
+        ]
+
+        let newSurfaceId = manager.splitPane(
+            workspaceId: workspaceId,
+            paneId: paneId,
+            orientation: .horizontal,
+            position: .first,
+            newSurface: createdSurface,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        XCTAssertEqual(newSurfaceId, createdSurface.id)
+        XCTAssertEqual(workspaces[0].focusedSurfaceId, createdSurface.id)
+
+        guard case .split(let split) = workspaces[0].rootPane else {
+            return XCTFail("Expected workspace root pane to become a split.")
+        }
+
+        XCTAssertEqual(split.orientation, .horizontal)
+        XCTAssertEqual(split.first.allSurfaceIds(), [createdSurface.id])
+        XCTAssertEqual(split.second.paneNode(id: paneId), makeLeaf(paneId: paneId, surfaces: [existingSurface]))
+    }
+
     /// Verifies zoom toggling only acts on existing panes and round-trips back to nil.
     func testTogglePaneZoomTogglesExistingPaneAndIgnoresUnknownPane() {
         let persistence = makePersistence()

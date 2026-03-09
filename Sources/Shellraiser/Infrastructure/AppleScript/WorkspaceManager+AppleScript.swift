@@ -97,13 +97,14 @@ extension WorkspaceManager {
         configuration: ScriptableSurfaceConfiguration?
     ) -> ScriptableTerminalSnapshot? {
         guard let target = surfaceContext(for: surfaceId) else { return nil }
-        guard let orientation = scriptSplitOrientation(direction: direction) else { return nil }
+        guard let placement = scriptSplitPlacement(direction: direction) else { return nil }
 
         var createdSurfaceId: UUID?
         createdSurfaceId = surfaceManager.splitPane(
             workspaceId: target.workspaceId,
             paneId: target.paneId,
-            orientation: orientation,
+            orientation: placement.orientation,
+            position: placement.position,
             newSurface: makeScriptSurface(configuration: configuration),
             workspaces: &workspaces,
             persistence: persistence
@@ -187,6 +188,12 @@ private extension PaneNodeModel {
 }
 
 private extension WorkspaceManager {
+    /// Split metadata resolved from AppleScript direction strings.
+    struct ScriptSplitPlacement {
+        let orientation: SplitOrientation
+        let position: SplitChildPosition
+    }
+
     /// Builds a surface model for AppleScript-driven creation flows.
     func makeScriptSurface(configuration: ScriptableSurfaceConfiguration?) -> SurfaceModel {
         var surface = SurfaceModel.makeDefault()
@@ -196,13 +203,17 @@ private extension WorkspaceManager {
         return surface
     }
 
-    /// Maps script split directions onto the app's split orientation model.
-    func scriptSplitOrientation(direction: String) -> SplitOrientation? {
+    /// Maps script split directions onto pane orientation and insertion position.
+    func scriptSplitPlacement(direction: String) -> ScriptSplitPlacement? {
         switch direction.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "left", "right":
-            return .horizontal
-        case "up", "down":
-            return .vertical
+        case "left":
+            return ScriptSplitPlacement(orientation: .horizontal, position: .first)
+        case "right":
+            return ScriptSplitPlacement(orientation: .horizontal, position: .second)
+        case "up":
+            return ScriptSplitPlacement(orientation: .vertical, position: .first)
+        case "down":
+            return ScriptSplitPlacement(orientation: .vertical, position: .second)
         default:
             return nil
         }
