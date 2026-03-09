@@ -14,10 +14,12 @@ struct ResolvedGitState: Equatable {
 /// Resolves visible Git metadata for a working directory using repository metadata.
 struct GitBranchResolver {
     private let fileManager: FileManager
+    private let searchBoundaryURL: URL?
 
     /// Creates a resolver with injectable filesystem access for testing.
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, searchBoundaryURL: URL? = nil) {
         self.fileManager = fileManager
+        self.searchBoundaryURL = searchBoundaryURL?.standardizedFileURL
     }
 
     /// Returns the visible Git state for a working directory, or `nil` when it is not inside a repository.
@@ -68,6 +70,7 @@ struct GitBranchResolver {
     /// Walks up parent directories until Git metadata is found.
     private func repositoryMetadata(startingAt directoryURL: URL) -> RepositoryMetadata? {
         var currentURL = normalizedDirectoryURL(for: directoryURL)
+        let boundaryPath = searchBoundaryURL?.path
 
         while true {
             let gitURL = currentURL.appendingPathComponent(".git")
@@ -78,6 +81,10 @@ struct GitBranchResolver {
                 }
 
                 return resolveGitFile(at: gitURL)
+            }
+
+            if currentURL.standardizedFileURL.path == boundaryPath {
+                return nil
             }
 
             let parentURL = currentURL.deletingLastPathComponent()

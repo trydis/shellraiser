@@ -86,13 +86,17 @@ final class GitBranchResolverTests: XCTestCase {
 
     /// Verifies directories outside Git repositories do not produce visible Git metadata.
     func testGitStateReturnsNilOutsideGitRepository() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = rootDirectory
+            .appendingPathComponent("outside", isDirectory: true)
+            .appendingPathComponent("repo", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock {
-            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: rootDirectory)
         }
 
-        let gitState = GitBranchResolver().resolveGitState(forWorkingDirectory: directory.path)
+        let gitState = GitBranchResolver(searchBoundaryURL: rootDirectory)
+            .resolveGitState(forWorkingDirectory: directory.path)
 
         XCTAssertNil(gitState)
     }
