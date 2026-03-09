@@ -97,7 +97,7 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
             )
         ]
 
-        manager.setSurfaceWorkingDirectory(
+        let refreshTask = manager.setSurfaceWorkingDirectory(
             workspaceId: workspaceId,
             surfaceId: surface.id,
             workingDirectory: "\(repositoryDirectory.path)\n"
@@ -108,11 +108,9 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
             repositoryDirectory.path
         )
 
-        let expectedState = ResolvedGitState(branchName: "main", isLinkedWorktree: false)
-        for _ in 0..<20 where manager.gitStatesBySurfaceId[surface.id] != expectedState {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
+        await refreshTask?.value
 
+        let expectedState = ResolvedGitState(branchName: "main", isLinkedWorktree: false)
         XCTAssertEqual(manager.gitStatesBySurfaceId[surface.id], expectedState)
     }
 }
