@@ -189,7 +189,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         """#
     }
 
-    /// Claude wrapper that injects `Stop` and `SubagentStop` hooks for the current surface.
+    /// Claude wrapper that injects the top-level `Stop` hook for the current surface.
     private var claudeWrapperContents: String {
         #"""
         #!/bin/sh
@@ -225,16 +225,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         {
           "hooks": {
             "Stop": [
-              {
-                "hooks": [
-                  {
-                    "type": "command",
-                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\""
-                  }
-                ]
-              }
-            ],
-            "SubagentStop": [
               {
                 "hooks": [
                   {
