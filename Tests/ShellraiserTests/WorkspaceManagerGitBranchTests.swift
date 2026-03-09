@@ -52,6 +52,29 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
         XCTAssertNil(manager.gitStatesBySurfaceId[surface.id])
     }
 
+    /// Verifies deleting a workspace clears cached Git state for its released surfaces.
+    func testDeleteWorkspaceClearsCachedGitState() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001314")!)
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001315")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001316")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.window.selectedWorkspaceId = workspaceId
+        manager.gitStatesBySurfaceId = [
+            surface.id: ResolvedGitState(branchName: "main", isLinkedWorktree: false)
+        ]
+
+        manager.deleteWorkspace(id: workspaceId)
+
+        XCTAssertNil(manager.gitStatesBySurfaceId[surface.id])
+    }
+
     /// Verifies manager-level pwd updates normalize the path before persisting and refreshing Git state.
     func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() async throws {
         let repositoryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
