@@ -52,7 +52,6 @@ struct WorkspaceView: View {
             DispatchQueue.main.async {
                 runtimeAppearanceRefreshTick &+= 1
             }
-            requestTerminalFocusIfSelected()
         }
         .onChange(of: manager.window.selectedWorkspaceId, initial: true) { _, selectedWorkspaceId in
             guard WorkspaceViewFocusLogic.shouldRequestFocus(
