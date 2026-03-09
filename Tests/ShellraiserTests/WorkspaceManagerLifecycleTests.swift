@@ -99,4 +99,30 @@ final class WorkspaceManagerLifecycleTests: WorkspaceTestCase {
         manager.selectWorkspace(atDisplayIndex: 3)
         XCTAssertEqual(manager.window.selectedWorkspaceId, second.id)
     }
+
+    /// Verifies selecting a workspace repairs its focused-surface state before subsequent focus flows.
+    func testSelectWorkspaceRepairsFocusedSurfaceState() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001321")!,
+            title: "Recovered"
+        )
+        let workspace = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001322")!,
+            name: "Recovered",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000001323")!,
+                surfaces: [surface],
+                activeSurfaceId: surface.id
+            ),
+            focusedSurfaceId: nil
+        )
+        manager.workspaces = [workspace]
+
+        manager.selectWorkspace(workspace.id)
+
+        XCTAssertEqual(manager.window.selectedWorkspaceId, workspace.id)
+        XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, surface.id)
+        XCTAssertEqual(manager.workspaces[0].rootPane.firstActiveSurfaceId(), surface.id)
+    }
 }

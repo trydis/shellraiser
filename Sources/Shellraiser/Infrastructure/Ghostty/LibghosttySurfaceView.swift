@@ -713,4 +713,12 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         return result
     }
 }
+
+extension LibghosttySurfaceView: GhosttyFocusableHost {
+    /// Window currently hosting the terminal surface view.
+    var hostWindow: NSWindow? { window }
+
+    /// First-responder target used for AppKit focus restoration.
+    var firstResponderTarget: NSResponder { self }
+}
 #endif

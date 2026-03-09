@@ -154,6 +154,20 @@ extension WorkspaceManager {
         index > 0 && index <= workspaces.count
     }
 
+    /// Restores first-responder focus to the selected workspace's active terminal surface.
+    func restoreSelectedWorkspaceTerminalFocus() {
+        guard let workspaceId = window.selectedWorkspaceId,
+              let workspace = workspace(id: workspaceId) else {
+            return
+        }
+
+        guard let surfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId() else {
+            return
+        }
+
+        GhosttyRuntime.shared.focusSurfaceHost(surfaceId: surfaceId)
+    }
+
     /// Returns the number of live terminal child processes currently mounted in a workspace.
     private func activeProcessCount(in workspace: WorkspaceModel) -> Int {
         workspace.rootPane.allSurfaceIds().count

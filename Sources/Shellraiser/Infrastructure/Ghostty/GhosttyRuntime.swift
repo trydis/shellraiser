@@ -3,6 +3,13 @@ import Foundation
 #if canImport(GhosttyKit)
 import GhosttyKit
 
+/// Minimal focus-host contract used by runtime focus restoration and tests.
+@MainActor
+protocol GhosttyFocusableHost: AnyObject {
+    var hostWindow: NSWindow? { get }
+    var firstResponderTarget: NSResponder { get }
+}
+
 /// Minimal global runtime that owns libghostty app/config and surface registration.
 @MainActor
 final class GhosttyRuntime {
@@ -244,22 +251,46 @@ final class GhosttyRuntime {
     func focusSurfaceHost(surfaceId: UUID) {
         pendingFocusedSurfaceId = surfaceId
         guard let hostView = hostViewsBySurfaceId[surfaceId] else { return }
-        let window = hostView.window ?? NSApp.keyWindow
-        guard let window else { return }
-        window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(hostView)
-        setSurfaceFocus(surfaceId: surfaceId, focused: true)
-        pendingFocusedSurfaceId = nil
+        if applyPendingFocusIfPossible(surfaceId: surfaceId, hostView: hostView) {
+            return
+        }
+
+        DispatchQueue.main.async { [weak self, weak hostView] in
+            guard let self, let hostView else { return }
+            guard self.pendingFocusedSurfaceId == surfaceId else { return }
+            _ = self.applyPendingFocusIfPossible(surfaceId: surfaceId, hostView: hostView)
+        }
     }
 
     /// Applies a deferred focus request once a surface host is mounted into a window.
-    func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: LibghosttySurfaceView) {
+    func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: any GhosttyFocusableHost) {
         guard pendingFocusedSurfaceId == surfaceId else { return }
-        guard let window = hostView.window ?? NSApp.keyWindow else { return }
+        _ = applyPendingFocusIfPossible(surfaceId: surfaceId, hostView: hostView)
+    }
+
+    /// Attempts to hand AppKit first-responder focus to a mounted surface host.
+    @discardableResult
+    private func applyPendingFocusIfPossible(
+        surfaceId: UUID,
+        hostView: any GhosttyFocusableHost
+    ) -> Bool {
+        guard let window = hostView.hostWindow else { return false }
+
         window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(hostView)
+        if window.firstResponder !== hostView.firstResponderTarget {
+            _ = window.makeFirstResponder(nil)
+            guard window.makeFirstResponder(hostView.firstResponderTarget) else { return false }
+        }
+
         setSurfaceFocus(surfaceId: surfaceId, focused: true)
         pendingFocusedSurfaceId = nil
+        return true
+    }
+
+    /// Test-only access to pending focus state.
+    var pendingFocusedSurfaceIdForTesting: UUID? {
+        get { pendingFocusedSurfaceId }
+        set { pendingFocusedSurfaceId = newValue }
     }
 
     /// Sends literal text input to a surface.
