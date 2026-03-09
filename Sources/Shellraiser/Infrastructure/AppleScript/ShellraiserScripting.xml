@@ -57,6 +57,7 @@
 
         <class name="surface configuration" code="SFCg" description="Configuration applied when creating scripted surfaces.">
             <cocoa class="ScriptableSurfaceConfiguration"/>
+            <property name="id" code="ID  " type="text" access="r" description="Stable surface configuration identifier."/>
             <property name="initial working directory" code="ShWd" type="text" access="rw" description="Initial working directory for created surfaces.">
                 <cocoa key="initialWorkingDirectory"/>
             </property>

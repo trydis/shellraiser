@@ -232,22 +232,18 @@ final class ScriptableTerminal: NSObject {
         snapshot.surfaceId
     }
 
-    /// Returns an index-based object specifier so AppleScript can refer back to this terminal.
+    /// Returns a unique-id object specifier so AppleScript can refer back to this terminal stably.
     @MainActor
     override var objectSpecifier: NSScriptObjectSpecifier? {
         guard let applicationClass = NSScriptClassDescription(for: NSApplication.self) else {
             return nil
         }
 
-        guard let index = ShellraiserScriptingController.shared.terminalIndex(surfaceId: surfaceId) else {
-            return nil
-        }
-
-        return NSIndexSpecifier(
+        return NSUniqueIDSpecifier(
             containerClassDescription: applicationClass,
             containerSpecifier: nil,
             key: "terminals",
-            index: index
+            uniqueID: id
         )
     }
 

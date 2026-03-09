@@ -200,9 +200,9 @@ private extension WorkspaceManager {
     func scriptSplitOrientation(direction: String) -> SplitOrientation? {
         switch direction.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "left", "right":
-            return .vertical
-        case "up", "down":
             return .horizontal
+        case "up", "down":
+            return .vertical
         default:
             return nil
         }
