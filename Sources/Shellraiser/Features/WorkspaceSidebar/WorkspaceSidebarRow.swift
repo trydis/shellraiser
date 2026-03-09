@@ -144,5 +144,6 @@ private struct WorktreeChip: View {
                 Capsule(style: .continuous)
                     .strokeBorder(AppTheme.stroke, lineWidth: 1)
             )
+            .accessibilityLabel("Linked worktree")
     }
 }
