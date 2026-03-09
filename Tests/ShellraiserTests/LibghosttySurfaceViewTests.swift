@@ -23,4 +23,11 @@ final class LibghosttySurfaceViewTests: XCTestCase {
 
         XCTAssertEqual(payload, "j")
     }
+
+    /// Verifies IME composition state stays active while marked text exists or was active before interpretation.
+    func testIsComposingReflectsCurrentAndPreviousMarkedTextState() {
+        XCTAssertTrue(LibghosttySurfaceView.isComposing(markedTextLength: 1, markedTextBefore: false))
+        XCTAssertTrue(LibghosttySurfaceView.isComposing(markedTextLength: 0, markedTextBefore: true))
+        XCTAssertFalse(LibghosttySurfaceView.isComposing(markedTextLength: 0, markedTextBefore: false))
+    }
 }

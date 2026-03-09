@@ -186,6 +186,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
 
         interpretKeyEvents([translatedEvent])
         syncPreedit(clearIfNeeded: markedTextBefore)
+        let composing = Self.isComposing(markedTextLength: markedText.length, markedTextBefore: markedTextBefore)
 
         if let textEvents = keyTextAccumulator, !textEvents.isEmpty {
             for text in textEvents {
@@ -208,6 +209,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
                 surfaceId: surfaceModel.id,
                 event: event,
                 action: action,
+                composing: composing,
                 modifiersOverride: translatedEvent.modifierFlags
             )
             return
@@ -222,7 +224,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
                 interpretedCommand: didInterpretCommand,
                 characters: translatedEvent.characters
             ),
-            composing: markedText.length > 0 || markedTextBefore,
+            composing: composing,
             modifiersOverride: translatedEvent.modifierFlags
         )
     }
@@ -674,6 +676,11 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     static func fallbackTextPayload(interpretedCommand: Bool, characters: String?) -> String? {
         guard !interpretedCommand else { return nil }
         return characters ?? ""
+    }
+
+    /// Returns whether the current key path is handling an active IME composition.
+    static func isComposing(markedTextLength: Int, markedTextBefore: Bool) -> Bool {
+        markedTextLength > 0 || markedTextBefore
     }
 
     /// Returns whether the terminal currently has a text selection.
