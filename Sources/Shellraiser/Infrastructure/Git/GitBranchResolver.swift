@@ -1,5 +1,20 @@
 import Foundation
 
+/// Filesystem entry kinds used while resolving Git metadata.
+enum GitResolverFileSystemEntryType {
+    case file
+    case directory
+}
+
+/// Filesystem access required by the Git branch resolver.
+protocol GitResolverFileSystem {
+    /// Returns the entry type for a URL when it exists.
+    func entryType(at url: URL) -> GitResolverFileSystemEntryType?
+
+    /// Reads a UTF-8 text file from the provided URL.
+    func readTextFile(at url: URL) -> String?
+}
+
 /// Resolved Git state for one working directory.
 struct ResolvedGitState: Equatable {
     let branchName: String?
@@ -13,12 +28,20 @@ struct ResolvedGitState: Equatable {
 
 /// Resolves visible Git metadata for a working directory using repository metadata.
 struct GitBranchResolver {
-    private let fileManager: FileManager
+    private let fileSystem: any GitResolverFileSystem
     private let searchBoundaryURL: URL?
 
     /// Creates a resolver with injectable filesystem access for testing.
     init(fileManager: FileManager = .default, searchBoundaryURL: URL? = nil) {
-        self.fileManager = fileManager
+        self.init(
+            fileSystem: LiveGitResolverFileSystem(fileManager: fileManager),
+            searchBoundaryURL: searchBoundaryURL
+        )
+    }
+
+    /// Creates a resolver with a custom filesystem implementation for tests.
+    init(fileSystem: any GitResolverFileSystem, searchBoundaryURL: URL? = nil) {
+        self.fileSystem = fileSystem
         self.searchBoundaryURL = searchBoundaryURL?.standardizedFileURL
     }
 
@@ -74,9 +97,8 @@ struct GitBranchResolver {
 
         while true {
             let gitURL = currentURL.appendingPathComponent(".git")
-            var isDirectory: ObjCBool = false
-            if fileManager.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) {
-                if isDirectory.boolValue {
+            if let entryType = fileSystem.entryType(at: gitURL) {
+                if entryType == .directory {
                     return RepositoryMetadata(gitMetadataURL: gitURL, isLinkedWorktree: false)
                 }
 
@@ -95,14 +117,7 @@ struct GitBranchResolver {
 
     /// Normalizes a starting path into a directory URL even when the path points at a file.
     private func normalizedDirectoryURL(for url: URL) -> URL {
-        var isDirectory: ObjCBool = false
-        let path = url.path
-
-        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
-              !isDirectory.boolValue else {
-            return url
-        }
-
+        guard fileSystem.entryType(at: url) == .file else { return url }
         return url.deletingLastPathComponent()
     }
 
@@ -151,6 +166,31 @@ struct GitBranchResolver {
 
     /// Reads a UTF-8 text file and trims invalid or unreadable paths to `nil`.
     private func readTextFile(at fileURL: URL) -> String? {
-        try? String(contentsOf: fileURL, encoding: .utf8)
+        fileSystem.readTextFile(at: fileURL)
+    }
+}
+
+/// Live filesystem adapter backed by Foundation file APIs.
+private struct LiveGitResolverFileSystem: GitResolverFileSystem {
+    private let fileManager: FileManager
+
+    /// Creates a live filesystem adapter from a `FileManager`.
+    init(fileManager: FileManager) {
+        self.fileManager = fileManager
+    }
+
+    /// Returns the entry type for a URL when it exists on disk.
+    func entryType(at url: URL) -> GitResolverFileSystemEntryType? {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return nil
+        }
+
+        return isDirectory.boolValue ? .directory : .file
+    }
+
+    /// Reads UTF-8 text contents from disk when the file is available.
+    func readTextFile(at url: URL) -> String? {
+        try? String(contentsOf: url, encoding: .utf8)
     }
 }
