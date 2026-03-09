@@ -123,7 +123,6 @@ final class GhosttyRuntime {
         releasedSurfaceIds.remove(surfaceModel.id)
 
         if let existing = hostViewsBySurfaceId[surfaceModel.id] {
-            mountedHostCountsBySurfaceId[surfaceModel.id, default: 0] += 1
             existing.update(
                 surfaceModel: surfaceModel,
                 terminalConfig: terminalConfig,
@@ -148,8 +147,13 @@ final class GhosttyRuntime {
             onPaneNavigationRequest: onPaneNavigationRequest
         )
         hostViewsBySurfaceId[surfaceModel.id] = created
-        mountedHostCountsBySurfaceId[surfaceModel.id] = 1
+        mountedHostCountsBySurfaceId[surfaceModel.id, default: 0] = 0
         return created
+    }
+
+    /// Marks a shared host view as mounted into one SwiftUI-owned wrapper container.
+    func attachHost(surfaceId: UUID) {
+        mountedHostCountsBySurfaceId[surfaceId, default: 0] += 1
     }
 
     /// Marks a host view as detached and schedules delayed cleanup.

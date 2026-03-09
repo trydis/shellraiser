@@ -37,6 +37,90 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertEqual(runtime.restorePendingFocusSurfaceIds, [surface.id])
         XCTAssertTrue(runtime.restoredHosts.first === host)
     }
+
+    /// Verifies remounting the same shared host into a new wrapper view reparents the host cleanly.
+    func testSyncContainerViewReparentsSharedHostWithoutDetachingCurrentMount() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let firstContainer = GhosttyTerminalContainerView(frame: .zero)
+        let secondContainer = GhosttyTerminalContainerView(frame: .zero)
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        GhosttyTerminalView.syncContainerView(
+            firstContainer,
+            host: host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: true,
+            onActivate: {},
+            onIdleNotification: {},
+            onUserInput: {},
+            onTitleChange: { _ in },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in }
+        )
+        GhosttyTerminalView.syncContainerView(
+            secondContainer,
+            host: host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: true,
+            onActivate: {},
+            onIdleNotification: {},
+            onUserInput: {},
+            onTitleChange: { _ in },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in }
+        )
+
+        XCTAssertTrue(host.superview === secondContainer)
+        XCTAssertEqual(firstContainer.subviews.count, 0)
+        XCTAssertEqual(secondContainer.subviews.count, 1)
+        XCTAssertEqual(firstContainer.mountedSurfaceId, surface.id)
+        XCTAssertEqual(secondContainer.mountedSurfaceId, surface.id)
+        XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id, surface.id])
+        XCTAssertEqual(runtime.detachHostSurfaceIds, [])
+    }
+
+    /// Verifies wrapper teardown decrements mount tracking for the surface once.
+    func testDismantleContainerViewDetachesMountedSurface() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let container = GhosttyTerminalContainerView(frame: .zero)
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        GhosttyTerminalView.syncContainerView(
+            container,
+            host: host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: false,
+            onActivate: {},
+            onIdleNotification: {},
+            onUserInput: {},
+            onTitleChange: { _ in },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in }
+        )
+        GhosttyTerminalView.dismantleContainerView(container, runtime: runtime)
+
+        XCTAssertNil(container.mountedSurfaceId)
+        XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id])
+        XCTAssertEqual(runtime.detachHostSurfaceIds, [surface.id])
+    }
 }
 
 /// Minimal terminal host double used to exercise `syncHostView`.
@@ -77,9 +161,21 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
 /// Runtime double that records focus synchronization calls from `GhosttyTerminalView`.
 @MainActor
 private final class MockGhosttyTerminalRuntime: GhosttyTerminalRuntimeControlling {
+    private(set) var attachHostSurfaceIds: [UUID] = []
+    private(set) var detachHostSurfaceIds: [UUID] = []
     private(set) var setSurfaceFocusCalls: [(surfaceId: UUID, focused: Bool)] = []
     private(set) var restorePendingFocusSurfaceIds: [UUID] = []
     private(set) var restoredHosts: [AnyObject] = []
+
+    /// Records wrapper-view mount registrations for a surface.
+    func attachHost(surfaceId: UUID) {
+        attachHostSurfaceIds.append(surfaceId)
+    }
+
+    /// Records wrapper-view unmount registrations for a surface.
+    func detachHost(surfaceId: UUID) {
+        detachHostSurfaceIds.append(surfaceId)
+    }
 
     /// Records direct focus-state updates for a surface.
     func setSurfaceFocus(surfaceId: UUID, focused: Bool) {
