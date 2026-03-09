@@ -195,7 +195,7 @@ final class GhosttyRuntime {
         initializeIfNeeded()
         guard let app else { return nil }
 
-        let command = commandString(for: terminalConfig)
+        let command = Self.launchCommand(for: terminalConfig)
         let environment = mergedEnvironment(
             for: terminalConfig,
             surfaceId: surfaceModel.id
@@ -957,9 +957,23 @@ final class GhosttyRuntime {
         }
     }
 
-    /// Creates a shell command that always starts a plain interactive shell.
-    private func commandString(for terminalConfig: TerminalPanelConfig) -> String {
-        "\(terminalConfig.shell.shellEscaped) -l"
+    /// Creates the shell command passed into Ghostty surface creation.
+    ///
+    /// Ghostty's embedded API treats the provided command as a shell command,
+    /// not a direct executable path. On macOS that command is additionally
+    /// wrapped in login-shell startup behavior. To make an explicit working
+    /// directory reliable, we enforce `cd` inside the launched command before
+    /// handing execution to the requested shell.
+    static func launchCommand(for terminalConfig: TerminalPanelConfig) -> String {
+        let shell = terminalConfig.shell.shellEscaped
+        let workingDirectory = terminalConfig.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !workingDirectory.isEmpty else {
+            return shell
+        }
+
+        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(shell)"
+        return "\("/bin/sh".shellEscaped) -lc \(script.shellEscaped)"
     }
 
     /// Merges runtime environment variables for terminal launch.

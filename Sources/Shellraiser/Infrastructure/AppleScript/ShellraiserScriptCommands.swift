@@ -50,6 +50,17 @@ extension TerminalTargetingScriptCommand {
     }
 }
 
+/// Shared helpers for resolving optional surface configuration parameters.
+@MainActor
+private extension NSScriptCommand {
+    /// Resolves the optional scripted surface configuration from supported parameter keys.
+    func resolvedSurfaceConfiguration() -> ScriptableSurfaceConfiguration? {
+        (evaluatedArguments?["configuration"] as? ScriptableSurfaceConfiguration)
+            ?? (evaluatedArguments?["with configuration"] as? ScriptableSurfaceConfiguration)
+            ?? (evaluatedArguments?["withConfiguration"] as? ScriptableSurfaceConfiguration)
+    }
+}
+
 /// Shared helpers for Shellraiser AppleScript split-direction decoding.
 private enum ScriptSplitDirectionResolver {
     /// Resolves an AppleScript split direction argument into a normalized direction name.
@@ -95,7 +106,7 @@ private enum ScriptSplitDirectionResolver {
 final class NewWorkspaceScriptCommand: NSScriptCommand {
     /// Executes the `new workspace` command against the application scripting controller.
     override func performDefaultImplementation() -> Any? {
-        let configuration = evaluatedArguments?["configuration"] as? ScriptableSurfaceConfiguration
+        let configuration = resolvedSurfaceConfiguration()
         guard let workspace = ShellraiserScriptingController.shared.newWorkspace(configuration: configuration) else {
             scriptErrorNumber = NSReceiverEvaluationScriptError
             scriptErrorString = "Shellraiser could not create the requested workspace."
@@ -162,7 +173,7 @@ final class SplitTerminalScriptCommand: NSScriptCommand, TerminalTargetingScript
         guard let direction = ScriptSplitDirectionResolver.resolve(evaluatedArguments?["direction"]) else {
             return failArgument("The split command requires a valid direction.")
         }
-        let configuration = evaluatedArguments?["configuration"] as? ScriptableSurfaceConfiguration
+        let configuration = resolvedSurfaceConfiguration()
 
         guard let created = ShellraiserScriptingController.shared.split(
             terminal: terminal,

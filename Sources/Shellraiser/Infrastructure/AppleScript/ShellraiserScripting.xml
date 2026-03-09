@@ -16,7 +16,9 @@
 
         <command name="new workspace" code="ShRsNwWs" description="Creates a new workspace.">
             <cocoa class="NewWorkspaceScriptCommand"/>
-            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration to apply to the new workspace."/>
+            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration to apply to the new workspace.">
+                <cocoa key="configuration"/>
+            </parameter>
             <result type="workspace" description="The newly created workspace."/>
         </command>
 
@@ -51,7 +53,9 @@
             <cocoa class="SplitTerminalScriptCommand"/>
             <parameter name="terminal" code="Trml" type="terminal" description="Terminal surface whose pane should be split."/>
             <parameter name="direction" code="ShDr" type="split direction" description="Direction for the new pane."/>
-            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration applied to the new terminal."/>
+            <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration applied to the new terminal.">
+                <cocoa key="configuration"/>
+            </parameter>
             <result type="terminal" description="The newly created terminal surface."/>
         </command>
 
