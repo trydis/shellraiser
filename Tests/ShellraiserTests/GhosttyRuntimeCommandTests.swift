@@ -1,3 +1,4 @@
+#if canImport(GhosttyKit)
 import XCTest
 @testable import Shellraiser
 
@@ -31,3 +32,4 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         XCTAssertTrue(command.contains("  /tmp/project with spaces  "))
     }
 }
+#endif
