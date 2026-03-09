@@ -332,10 +332,7 @@ final class WorkspaceSurfaceManagerSurfaceStateTests: WorkspaceTestCase {
         XCTAssertFalse(self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)?.hasUnreadIdleNotification ?? true)
         XCTAssertEqual(persistence.load(), workspaces)
 
-        try? FileManager.default.removeItem(
-            at: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent(ProcessInfo.processInfo.environment[WorkspacePersistence.appSupportSubdirectoryEnvironmentKey]!, isDirectory: true)
-        )
+        try? FileManager.default.removeItem(at: persistence.directoryURL)
 
         manager.setIdleState(
             workspaceId: workspaceId,
