@@ -76,7 +76,7 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
     }
 
     /// Verifies manager-level pwd updates normalize the path before persisting and refreshing Git state.
-    func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() async throws {
+    func testSetSurfaceWorkingDirectoryNormalizesPathBeforeRefreshingGitState() throws {
         throw XCTSkip("Temporarily ignored while diagnosing the CI-only failure.")
     }
 }
