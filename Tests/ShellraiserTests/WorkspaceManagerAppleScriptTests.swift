@@ -63,13 +63,16 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         let delegate = ShellraiserAppDelegate()
         XCTAssertEqual(delegate.valueInTerminals(withUniqueID: topRight.id)?.id, topRight.id)
 
-        _ = manager.splitScriptTerminal(
+        guard let bottomLeft = manager.splitScriptTerminal(
             surfaceId: topLeftSurface.id,
             direction: "down",
             configuration: nil
-        )
+        ) else {
+            return XCTFail("Expected second script split to create the bottom-left terminal.")
+        }
 
         XCTAssertEqual(delegate.valueInTerminals(withUniqueID: topRight.id)?.id, topRight.id)
+        XCTAssertEqual(delegate.valueInTerminals(withUniqueID: bottomLeft.id)?.id, bottomLeft.id)
     }
 
     /// Verifies script directions map onto the expected side-by-side and stacked pane layouts.
