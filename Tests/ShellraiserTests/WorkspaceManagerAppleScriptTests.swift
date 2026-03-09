@@ -4,6 +4,34 @@ import XCTest
 /// Covers AppleScript-oriented workspace and split behavior.
 @MainActor
 final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
+    /// Verifies creating a workspace with a scripted surface configuration applies its working directory.
+    func testNewWorkspaceAppliesSurfaceConfigurationWorkingDirectory() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        let configuration = ScriptableSurfaceConfiguration()
+        configuration.initialWorkingDirectory = "/tmp/project"
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(configuration: configuration) else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        guard let terminal = workspace.selectedTab?.terminals.first else {
+            return XCTFail("Expected scripted workspace to expose its initial terminal.")
+        }
+
+        XCTAssertEqual(terminal.workingDirectory, "/tmp/project")
+        XCTAssertEqual(manager.workspaces.first?.rootPane.firstActiveSurfaceId(), UUID(uuidString: terminal.id))
+
+        guard let surfaceId = UUID(uuidString: terminal.id),
+              let createdSurface = surface(in: manager.workspaces[0].rootPane, surfaceId: surfaceId) else {
+            return XCTFail("Expected workspace state to contain the created terminal surface.")
+        }
+
+        XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/project")
+    }
+
     /// Verifies unique-id terminal resolution survives later pane mutations that reorder terminal snapshots.
     func testTerminalUniqueIDResolutionRemainsStableAfterAdditionalSplits() {
         let manager = makeWorkspaceManager()
