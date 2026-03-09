@@ -26,8 +26,10 @@
 - Prefer small and focused classes
 
 ## Testing Guidelines
+- Test suite lives in `Tests/ShellraiserTests` and is exposed through the SwiftPM target `ShellraiserTests`.
+- Run `swift test` for unit and integration coverage during normal iteration.
 - Minimum validation before commit:
-  - `swift build`
+  - `swift test`
   - `make build-app`
 
 ## Commit & Pull Request Guidelines
