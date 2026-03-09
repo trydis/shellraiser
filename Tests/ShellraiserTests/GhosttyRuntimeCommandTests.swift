@@ -31,5 +31,17 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         let command = GhosttyRuntime.launchCommand(for: config)
         XCTAssertTrue(command.contains("  /tmp/project with spaces  "))
     }
+
+    /// Verifies whitespace-only working directories are treated as unspecified.
+    func testLaunchCommandTreatsWhitespaceOnlyWorkingDirectoryAsUnset() {
+        let config = TerminalPanelConfig(
+            workingDirectory: "   \n\t  ",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        let command = GhosttyRuntime.launchCommand(for: config)
+        XCTAssertEqual(command, "'/bin/zsh'")
+    }
 }
 #endif
