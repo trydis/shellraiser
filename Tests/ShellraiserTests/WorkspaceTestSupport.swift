@@ -107,7 +107,7 @@ class WorkspaceTestCase: XCTestCase {
     /// Creates a workspace manager with controllable test doubles.
     @MainActor
     func makeWorkspaceManager(
-        persistence: WorkspacePersistence? = nil,
+        persistence: (any WorkspacePersisting)? = nil,
         workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: MockAgentRuntimeBridge? = nil,
@@ -117,16 +117,31 @@ class WorkspaceTestCase: XCTestCase {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
     ) -> WorkspaceManager {
-        _ = NSApplication.shared
         return WorkspaceManager(
-            persistence: persistence ?? makePersistence(),
+            persistence: persistence ?? InMemoryWorkspacePersistence(),
             workspaceCatalog: workspaceCatalog,
             surfaceManager: surfaceManager,
             runtimeBridge: runtimeBridge ?? MockAgentRuntimeBridge(),
             completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
             completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor(),
+            registersLocalShortcutMonitor: false,
             gitStateResolver: gitStateResolver
         )
+    }
+}
+
+/// In-memory persistence double for manager tests that should avoid filesystem I/O.
+final class InMemoryWorkspacePersistence: WorkspacePersisting {
+    private var storedWorkspaces: [WorkspaceModel]?
+
+    /// Returns the last workspaces snapshot written into the test double.
+    func load() -> [WorkspaceModel]? {
+        storedWorkspaces
+    }
+
+    /// Replaces the stored workspace snapshot in memory.
+    func save(_ workspaces: [WorkspaceModel]) {
+        storedWorkspaces = workspaces
     }
 }
 

@@ -1,7 +1,16 @@
 import Foundation
 
+/// Persistence interface used by workspace services and tests.
+protocol WorkspacePersisting {
+    /// Loads serialized workspaces from storage.
+    func load() -> [WorkspaceModel]?
+
+    /// Persists workspaces to storage.
+    func save(_ workspaces: [WorkspaceModel])
+}
+
 /// Filesystem-backed persistence for workspace layout state.
-final class WorkspacePersistence {
+final class WorkspacePersistence: WorkspacePersisting {
     /// Environment variable used to force a dedicated Application Support subdirectory.
     static let appSupportSubdirectoryEnvironmentKey = "SHELLRAISER_APP_SUPPORT_SUBDIRECTORY"
 

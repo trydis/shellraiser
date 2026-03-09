@@ -72,7 +72,7 @@ final class WorkspaceManager: ObservableObject {
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
 
-    let persistence: WorkspacePersistence
+    let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager
     let surfaceManager: WorkspaceSurfaceManager
     let runtimeBridge: any AgentRuntimeSupporting
@@ -87,12 +87,13 @@ final class WorkspaceManager: ObservableObject {
 
     /// Creates a manager with explicit dependencies for testability.
     init(
-        persistence: WorkspacePersistence = WorkspacePersistence(),
+        persistence: any WorkspacePersisting = WorkspacePersistence(),
         workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: (any AgentRuntimeSupporting)? = nil,
         completionNotifications: any AgentCompletionNotificationManaging = AgentCompletionNotificationManager(),
         completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil,
+        registersLocalShortcutMonitor: Bool = true,
         gitStateResolver: @escaping GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
@@ -119,7 +120,9 @@ final class WorkspaceManager: ObservableObject {
             self?.handleCompletionEvent(event)
         }
 
-        registerLocalShortcutMonitor()
+        if registersLocalShortcutMonitor {
+            registerLocalShortcutMonitor()
+        }
     }
 
     deinit {

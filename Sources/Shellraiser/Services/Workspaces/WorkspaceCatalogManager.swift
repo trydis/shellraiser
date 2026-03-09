@@ -17,7 +17,7 @@ final class WorkspaceCatalogManager {
     func loadWorkspaces(
         into workspaces: inout [WorkspaceModel],
         window: inout WindowModel,
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         workspaces = persistence.load() ?? []
 
@@ -54,7 +54,7 @@ final class WorkspaceCatalogManager {
         initialSurface: SurfaceModel = SurfaceModel.makeDefault(),
         workspaces: inout [WorkspaceModel],
         window: inout WindowModel,
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) -> WorkspaceModel {
         let workspace = WorkspaceModel.makeDefault(name: name, initialSurface: initialSurface)
         workspaces.append(workspace)
@@ -68,7 +68,7 @@ final class WorkspaceCatalogManager {
         id: UUID,
         name: String,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         mutateWorkspace(id: id, workspaces: &workspaces) { workspace in
             let isOnlyWhitespace = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -82,7 +82,7 @@ final class WorkspaceCatalogManager {
         id: UUID,
         workspaces: inout [WorkspaceModel],
         window: inout WindowModel,
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         workspaces.removeAll { $0.id == id }
 
@@ -107,7 +107,7 @@ final class WorkspaceCatalogManager {
         _ id: UUID?,
         window: inout WindowModel,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         window.selectedWorkspaceId = id
 
@@ -123,7 +123,7 @@ final class WorkspaceCatalogManager {
     func focusFirstUnreadNotification(
         workspaces: inout [WorkspaceModel],
         window: inout WindowModel,
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         for index in workspaces.indices {
             if let surfaceId = workspaces[index].rootPane.firstUnreadSurfaceId() {

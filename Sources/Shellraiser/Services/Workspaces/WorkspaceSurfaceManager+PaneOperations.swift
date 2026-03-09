@@ -7,7 +7,7 @@ extension WorkspaceSurfaceManager {
         paneId: UUID,
         surface: SurfaceModel,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) -> Bool {
         var appended = false
 
@@ -27,7 +27,7 @@ extension WorkspaceSurfaceManager {
         paneId: UUID,
         surfaceId: UUID,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
             let removed = workspace.rootPane.removeSurface(from: paneId, surfaceId: surfaceId)
@@ -48,7 +48,7 @@ extension WorkspaceSurfaceManager {
         paneId: UUID,
         surfaceId: UUID,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
             let activated = workspace.rootPane.setActiveSurface(in: paneId, surfaceId: surfaceId)
@@ -67,7 +67,7 @@ extension WorkspaceSurfaceManager {
         position: SplitChildPosition = .second,
         newSurface: SurfaceModel = SurfaceModel.makeDefault(),
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) -> UUID? {
         var createdSurfaceId: UUID?
 
@@ -94,7 +94,7 @@ extension WorkspaceSurfaceManager {
         ratio: Double,
         persist: Bool,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
             _ = workspace.rootPane.updateSplitRatio(paneId: paneId, ratio: ratio)
@@ -110,7 +110,7 @@ extension WorkspaceSurfaceManager {
         workspaceId: UUID,
         paneId: UUID,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         var didChange = false
 
