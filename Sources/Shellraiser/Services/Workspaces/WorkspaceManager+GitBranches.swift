@@ -36,16 +36,29 @@ extension WorkspaceManager {
 
         return Task.detached(priority: .utility) {
             let gitState = gitStateResolver(requestedWorkingDirectory)
-            await MainActor.run {
-                guard let workspace = self.workspace(id: workspaceId),
-                      let surface = self.surface(in: workspace.rootPane, surfaceId: surfaceId),
-                      surface.terminalConfig.workingDirectory == requestedWorkingDirectory else {
-                    return
-                }
-
-                self.gitStatesBySurfaceId[surfaceId] = gitState
-            }
+            await self.applyResolvedGitState(
+                gitState,
+                workspaceId: workspaceId,
+                surfaceId: surfaceId,
+                requestedWorkingDirectory: requestedWorkingDirectory
+            )
         }
+    }
+
+    /// Applies a resolved Git state when the surface still points at the requested working directory.
+    private func applyResolvedGitState(
+        _ gitState: ResolvedGitState?,
+        workspaceId: UUID,
+        surfaceId: UUID,
+        requestedWorkingDirectory: String
+    ) {
+        guard let workspace = workspace(id: workspaceId),
+              let surface = surface(in: workspace.rootPane, surfaceId: surfaceId),
+              surface.terminalConfig.workingDirectory == requestedWorkingDirectory else {
+            return
+        }
+
+        gitStatesBySurfaceId[surfaceId] = gitState
     }
 
     /// Removes cached Git state for a surface that is no longer present.

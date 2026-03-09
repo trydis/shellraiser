@@ -109,9 +109,7 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
         let refreshCompleted = expectation(description: "Git refresh completes")
         Task.detached {
             await refreshTask?.value
-            await MainActor.run {
-                refreshCompleted.fulfill()
-            }
+            refreshCompleted.fulfill()
         }
 
         wait(for: [refreshCompleted], timeout: 1.0)
