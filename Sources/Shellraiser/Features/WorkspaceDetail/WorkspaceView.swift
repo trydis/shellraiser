@@ -1,11 +1,25 @@
 import SwiftUI
 
+/// Focus trigger logic extracted from `WorkspaceView` for unit testing.
+enum WorkspaceViewFocusLogic {
+    /// Returns whether the current selection should restore focus for this workspace.
+    static func shouldRequestFocus(selectedWorkspaceId: UUID?, workspaceId: UUID) -> Bool {
+        selectedWorkspaceId == workspaceId
+    }
+
+    /// Returns whether a first-appearance layout refresh should trigger a follow-up focus restore.
+    static func shouldRestoreFocusAfterLayoutRefresh(pendingRestore: Bool) -> Bool {
+        pendingRestore
+    }
+}
+
 /// Main detail view for a selected workspace.
 struct WorkspaceView: View {
     let workspaceId: UUID
     @ObservedObject var manager: WorkspaceManager
     @State private var runtimeAppearanceRefreshTick = 0
     @State private var hasPerformedInitialLayoutRefresh = false
+    @State private var pendingFocusRestoreAfterLayoutRefresh = false
 
     private var workspace: WorkspaceModel? {
         manager.workspace(id: workspaceId)
@@ -30,10 +44,32 @@ struct WorkspaceView: View {
         .onAppear {
             guard !hasPerformedInitialLayoutRefresh else { return }
             hasPerformedInitialLayoutRefresh = true
+            pendingFocusRestoreAfterLayoutRefresh = WorkspaceViewFocusLogic.shouldRequestFocus(
+                selectedWorkspaceId: manager.window.selectedWorkspaceId,
+                workspaceId: workspaceId
+            )
 
             DispatchQueue.main.async {
                 runtimeAppearanceRefreshTick &+= 1
             }
+        }
+        .onChange(of: manager.window.selectedWorkspaceId, initial: true) { _, selectedWorkspaceId in
+            guard WorkspaceViewFocusLogic.shouldRequestFocus(
+                selectedWorkspaceId: selectedWorkspaceId,
+                workspaceId: workspaceId
+            ) else {
+                return
+            }
+            requestTerminalFocusIfSelected()
+        }
+        .onChange(of: runtimeAppearanceRefreshTick) { _, _ in
+            guard WorkspaceViewFocusLogic.shouldRestoreFocusAfterLayoutRefresh(
+                pendingRestore: pendingFocusRestoreAfterLayoutRefresh
+            ) else {
+                return
+            }
+            pendingFocusRestoreAfterLayoutRefresh = false
+            requestTerminalFocusIfSelected()
         }
     }
 
@@ -47,5 +83,19 @@ struct WorkspaceView: View {
             manager: manager
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Re-requests terminal first-responder focus once the selected workspace view is mounted.
+    private func requestTerminalFocusIfSelected() {
+        guard WorkspaceViewFocusLogic.shouldRequestFocus(
+            selectedWorkspaceId: manager.window.selectedWorkspaceId,
+            workspaceId: workspaceId
+        ) else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            manager.restoreSelectedWorkspaceTerminalFocus()
+        }
     }
 }
