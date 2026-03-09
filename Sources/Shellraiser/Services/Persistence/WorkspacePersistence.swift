@@ -1,7 +1,16 @@
 import Foundation
 
+/// Persistence interface used by workspace services and tests.
+protocol WorkspacePersisting {
+    /// Loads serialized workspaces from storage.
+    func load() -> [WorkspaceModel]?
+
+    /// Persists workspaces to storage.
+    func save(_ workspaces: [WorkspaceModel])
+}
+
 /// Filesystem-backed persistence for workspace layout state.
-final class WorkspacePersistence {
+final class WorkspacePersistence: WorkspacePersisting {
     /// Environment variable used to force a dedicated Application Support subdirectory.
     static let appSupportSubdirectoryEnvironmentKey = "SHELLRAISER_APP_SUPPORT_SUBDIRECTORY"
 
@@ -9,16 +18,34 @@ final class WorkspacePersistence {
     static let suppressErrorLoggingEnvironmentKey = "SHELLRAISER_SUPPRESS_PERSISTENCE_ERRORS"
 
     private let fileManager = FileManager.default
+    private let logsErrors: Bool
     private let workspaceFileURL: URL
 
+    /// Returns the directory containing the persisted workspace file.
+    var directoryURL: URL {
+        workspaceFileURL.deletingLastPathComponent()
+    }
+
     /// Creates persistence rooted under Application Support.
-    init() {
+    convenience init() {
+        self.init(
+            directoryURL: Self.defaultDirectoryURL(fileManager: .default)
+        )
+    }
+
+    /// Creates persistence rooted under an explicit directory.
+    init(directoryURL: URL, logsErrors: Bool? = nil) {
+        self.logsErrors = logsErrors ?? Self.shouldLogErrors
+        workspaceFileURL = directoryURL.appendingPathComponent("workspaces.json")
+    }
+
+    /// Resolves the default persistence directory for the current app instance.
+    private static func defaultDirectoryURL(fileManager: FileManager) -> URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDirectory = appSupport.appendingPathComponent(
-            Self.appSupportSubdirectory(),
+        return appSupport.appendingPathComponent(
+            appSupportSubdirectory(),
             isDirectory: true
         )
-        workspaceFileURL = appDirectory.appendingPathComponent("workspaces.json")
     }
 
     /// Resolves the Application Support subdirectory for the current app instance.
@@ -101,7 +128,7 @@ final class WorkspacePersistence {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode([WorkspaceModel].self, from: data)
         } catch {
-            if Self.shouldLogErrors {
+            if logsErrors {
                 print("Failed to load workspaces: \(error)")
             }
             return nil
@@ -123,7 +150,7 @@ final class WorkspacePersistence {
 
             try data.write(to: workspaceFileURL, options: .atomic)
         } catch {
-            if Self.shouldLogErrors {
+            if logsErrors {
                 print("Failed to save workspaces: \(error)")
             }
         }

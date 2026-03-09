@@ -27,6 +27,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -62,6 +63,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -76,6 +78,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -87,6 +90,38 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertEqual(secondContainer.mountedSurfaceId, surface.id)
         XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id, surface.id])
         XCTAssertEqual(runtime.detachHostSurfaceIds, [])
+    }
+
+    /// Verifies working-directory change callbacks are forwarded through host synchronization.
+    func testSyncHostViewForwardsWorkingDirectoryChangeHandler() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+        var reportedWorkingDirectories: [String] = []
+
+        GhosttyTerminalView.syncHostView(
+            host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: false,
+            onActivate: {},
+            onIdleNotification: {},
+            onUserInput: {},
+            onTitleChange: { _ in },
+            onWorkingDirectoryChange: { reportedWorkingDirectories.append($0) },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in }
+        )
+
+        host.workingDirectoryChangeHandler?("new/path")
+
+        XCTAssertEqual(reportedWorkingDirectories, ["new/path"])
     }
 
     /// Verifies wrapper teardown decrements mount tracking for the surface once.
@@ -112,6 +147,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
@@ -127,6 +163,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
 @MainActor
 private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView {
     private(set) var updatedSurfaceIds: [UUID] = []
+    private(set) var workingDirectoryChangeHandler: ((String) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -144,6 +181,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         onIdleNotification: @escaping () -> Void,
         onUserInput: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
     ) {
@@ -152,6 +190,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         _ = onIdleNotification
         _ = onUserInput
         _ = onTitleChange
+        workingDirectoryChangeHandler = onWorkingDirectoryChange
         _ = onChildExited
         _ = onPaneNavigationRequest
         updatedSurfaceIds.append(surfaceModel.id)

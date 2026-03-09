@@ -5,32 +5,23 @@ import XCTest
 
 /// Shared fixtures and persistence helpers for workspace service tests.
 class WorkspaceTestCase: XCTestCase {
-    /// Creates a persistence instance rooted in a unique Application Support subdirectory.
+    /// Creates a persistence instance rooted in a unique test directory.
     func makePersistence(testName: String = #function) -> WorkspacePersistence {
         makePersistenceContext(testName: testName).persistence
     }
 
-    /// Creates a persistence instance together with its isolated Application Support directory.
+    /// Creates a persistence instance together with its isolated test directory.
     func makePersistenceContext(testName: String = #function) -> (persistence: WorkspacePersistence, directory: URL) {
         let sanitizedTestName = testName
             .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "-", options: .regularExpression)
         let subdirectory = "ShellraiserTests-\(sanitizedTestName)-\(UUID().uuidString)"
-
-        setenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey, subdirectory, 1)
-        setenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey, "1", 1)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(subdirectory, isDirectory: true)
         addTeardownBlock {
-            unsetenv(WorkspacePersistence.appSupportSubdirectoryEnvironmentKey)
-            unsetenv(WorkspacePersistence.suppressErrorLoggingEnvironmentKey)
-
-            let fileManager = FileManager.default
-            let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            let testDirectory = appSupport.appendingPathComponent(subdirectory, isDirectory: true)
-            try? fileManager.removeItem(at: testDirectory)
+            try? FileManager.default.removeItem(at: directory)
         }
 
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let directory = appSupport.appendingPathComponent(subdirectory, isDirectory: true)
-        return (WorkspacePersistence(), directory)
+        return (WorkspacePersistence(directoryURL: directory, logsErrors: false), directory)
     }
 
     /// Creates a deterministic surface fixture with overridable state.
@@ -116,22 +107,41 @@ class WorkspaceTestCase: XCTestCase {
     /// Creates a workspace manager with controllable test doubles.
     @MainActor
     func makeWorkspaceManager(
-        persistence: WorkspacePersistence? = nil,
+        persistence: (any WorkspacePersisting)? = nil,
         workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: MockAgentRuntimeBridge? = nil,
         notifications: MockAgentCompletionNotificationManager? = nil,
-        eventMonitor: MockAgentCompletionEventMonitor? = nil
+        eventMonitor: MockAgentCompletionEventMonitor? = nil,
+        gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
+            GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
+        }
     ) -> WorkspaceManager {
-        _ = NSApplication.shared
         return WorkspaceManager(
-            persistence: persistence ?? makePersistence(),
+            persistence: persistence ?? InMemoryWorkspacePersistence(),
             workspaceCatalog: workspaceCatalog,
             surfaceManager: surfaceManager,
             runtimeBridge: runtimeBridge ?? MockAgentRuntimeBridge(),
             completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
-            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor()
+            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor(),
+            registersLocalShortcutMonitor: false,
+            gitStateResolver: gitStateResolver
         )
+    }
+}
+
+/// In-memory persistence double for manager tests that should avoid filesystem I/O.
+final class InMemoryWorkspacePersistence: WorkspacePersisting {
+    private var storedWorkspaces: [WorkspaceModel]?
+
+    /// Returns the last workspaces snapshot written into the test double.
+    func load() -> [WorkspaceModel]? {
+        storedWorkspaces
+    }
+
+    /// Replaces the stored workspace snapshot in memory.
+    func save(_ workspaces: [WorkspaceModel]) {
+        storedWorkspaces = workspaces
     }
 }
 

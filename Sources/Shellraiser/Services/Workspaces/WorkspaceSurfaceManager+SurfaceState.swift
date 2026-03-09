@@ -7,7 +7,7 @@ extension WorkspaceSurfaceManager {
         surfaceId: UUID,
         isIdle: Bool,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         var shouldPersist = false
 
@@ -41,7 +41,7 @@ extension WorkspaceSurfaceManager {
         sequence: Int,
         timestamp: Date,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) -> Bool {
         var shouldPersist = false
         var didEnqueue = false
@@ -84,7 +84,7 @@ extension WorkspaceSurfaceManager {
         workspaceId: UUID,
         surfaceId: UUID,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) -> Bool {
         var didChange = false
 
@@ -115,7 +115,7 @@ extension WorkspaceSurfaceManager {
         surfaceId: UUID,
         agentType: AgentType,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         var didChange = false
 
@@ -137,7 +137,7 @@ extension WorkspaceSurfaceManager {
         workspaceId: UUID,
         surfaceId: UUID,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
             _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
@@ -153,7 +153,7 @@ extension WorkspaceSurfaceManager {
         surfaceId: UUID,
         title: String,
         workspaces: inout [WorkspaceModel],
-        persistence: WorkspacePersistence
+        persistence: any WorkspacePersisting
     ) {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTitle = title.isEmpty ? "~" : title
@@ -163,6 +163,32 @@ extension WorkspaceSurfaceManager {
             _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
                 guard surface.title != resolvedTitle else { return }
                 surface.title = resolvedTitle
+                didChange = true
+            }
+        }
+
+        if didChange {
+            persistence.save(workspaces)
+        }
+    }
+
+    /// Updates the reported working directory for a surface when the terminal changes directories.
+    func setSurfaceWorkingDirectory(
+        workspaceId: UUID,
+        surfaceId: UUID,
+        workingDirectory: String,
+        workspaces: inout [WorkspaceModel],
+        persistence: any WorkspacePersisting
+    ) {
+        let normalizedWorkingDirectory = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedWorkingDirectory.isEmpty else { return }
+
+        var didChange = false
+
+        mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
+            _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
+                guard surface.terminalConfig.workingDirectory != normalizedWorkingDirectory else { return }
+                surface.terminalConfig.workingDirectory = normalizedWorkingDirectory
                 didChange = true
             }
         }

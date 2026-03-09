@@ -209,6 +209,13 @@ struct PaneLeafView: View {
                         onTitleChange: { title in
                             manager.setSurfaceTitle(workspaceId: workspaceId, surfaceId: activeSurface.id, title: title)
                         },
+                        onWorkingDirectoryChange: { workingDirectory in
+                            manager.setSurfaceWorkingDirectory(
+                                workspaceId: workspaceId,
+                                surfaceId: activeSurface.id,
+                                workingDirectory: workingDirectory
+                            )
+                        },
                         onChildExited: {
                             guard let workspace = manager.workspace(id: workspaceId) else { return }
                             guard let paneId = workspace.rootPane.paneId(containing: activeSurface.id) else { return }

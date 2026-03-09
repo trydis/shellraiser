@@ -43,6 +43,9 @@ struct WorkspaceRenameRequest: Identifiable {
 /// Central app-state manager for window, workspace, pane, and surface operations.
 @MainActor
 final class WorkspaceManager: ObservableObject {
+    /// Callable resolver used to derive Git state from a working directory.
+    typealias GitStateResolver = @Sendable (String) -> ResolvedGitState?
+
     /// App-owned commands that operate on the focused pane and its active tab.
     enum FocusedPaneCommand {
         case newSurface
@@ -67,13 +70,15 @@ final class WorkspaceManager: ObservableObject {
     @Published var isCommandPalettePresented = false
     @Published var pendingWorkspaceDeletion: WorkspaceDeletionRequest?
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
+    @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
 
-    let persistence: WorkspacePersistence
+    let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager
     let surfaceManager: WorkspaceSurfaceManager
     let runtimeBridge: any AgentRuntimeSupporting
     let completionNotifications: any AgentCompletionNotificationManaging
     let completionEventMonitor: any AgentCompletionEventMonitoring
+    let gitStateResolver: GitStateResolver
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
@@ -82,12 +87,16 @@ final class WorkspaceManager: ObservableObject {
 
     /// Creates a manager with explicit dependencies for testability.
     init(
-        persistence: WorkspacePersistence = WorkspacePersistence(),
+        persistence: any WorkspacePersisting = WorkspacePersistence(),
         workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: (any AgentRuntimeSupporting)? = nil,
         completionNotifications: any AgentCompletionNotificationManaging = AgentCompletionNotificationManager(),
-        completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil
+        completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil,
+        registersLocalShortcutMonitor: Bool = true,
+        gitStateResolver: @escaping GitStateResolver = {
+            GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
+        }
     ) {
         let resolvedRuntimeBridge = runtimeBridge ?? AgentRuntimeBridge.shared
         let resolvedCompletionEventMonitor = completionEventMonitor
@@ -100,6 +109,7 @@ final class WorkspaceManager: ObservableObject {
         self.completionNotifications = completionNotifications
         resolvedRuntimeBridge.prepareRuntimeSupport()
         self.completionEventMonitor = resolvedCompletionEventMonitor
+        self.gitStateResolver = gitStateResolver
 
         completionNotifications.onActivateSurface = { [weak self] surfaceId in
             Task { @MainActor in
@@ -110,7 +120,9 @@ final class WorkspaceManager: ObservableObject {
             self?.handleCompletionEvent(event)
         }
 
-        registerLocalShortcutMonitor()
+        if registersLocalShortcutMonitor {
+            registerLocalShortcutMonitor()
+        }
     }
 
     deinit {

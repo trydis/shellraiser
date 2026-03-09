@@ -28,6 +28,17 @@ extension WorkspaceManager {
         )
         completionNotifications.removeNotifications(for: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
+        clearGitBranch(surfaceId: surfaceId)
+
+        if let workspace = workspace(id: workspaceId),
+           let focusedSurfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId(),
+           let focusedSurface = surface(in: workspace.rootPane, surfaceId: focusedSurfaceId) {
+            refreshGitBranch(
+                workspaceId: workspaceId,
+                surfaceId: focusedSurfaceId,
+                workingDirectory: focusedSurface.terminalConfig.workingDirectory
+            )
+        }
     }
 
     /// Marks a surface as active in both pane and workspace focus state.
@@ -50,6 +61,15 @@ extension WorkspaceManager {
         }
         completionNotifications.removeNotifications(for: surfaceId)
         GhosttyRuntime.shared.focusSurfaceHost(surfaceId: surfaceId)
+
+        if let workspace = workspace(id: workspaceId),
+           let surface = surface(in: workspace.rootPane, surfaceId: surfaceId) {
+            refreshGitBranch(
+                workspaceId: workspaceId,
+                surfaceId: surfaceId,
+                workingDirectory: surface.terminalConfig.workingDirectory
+            )
+        }
     }
 
     /// Splits a leaf pane and creates a fresh terminal in the new pane.
@@ -103,6 +123,25 @@ extension WorkspaceManager {
             title: title,
             workspaces: &workspaces,
             persistence: persistence
+        )
+    }
+
+    /// Updates the tracked working directory for a surface and refreshes its Git branch state.
+    @discardableResult
+    func setSurfaceWorkingDirectory(workspaceId: UUID, surfaceId: UUID, workingDirectory: String) -> Task<Void, Never>? {
+        let normalizedWorkingDirectory = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        surfaceManager.setSurfaceWorkingDirectory(
+            workspaceId: workspaceId,
+            surfaceId: surfaceId,
+            workingDirectory: normalizedWorkingDirectory,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+        guard !normalizedWorkingDirectory.isEmpty else { return nil }
+        return refreshGitBranch(
+            workspaceId: workspaceId,
+            surfaceId: surfaceId,
+            workingDirectory: normalizedWorkingDirectory
         )
     }
 
