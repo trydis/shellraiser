@@ -53,11 +53,17 @@ extension WorkspaceManager {
     }
 
     /// Splits a leaf pane and creates a fresh terminal in the new pane.
-    func splitPane(workspaceId: UUID, paneId: UUID, orientation: SplitOrientation) {
+    func splitPane(
+        workspaceId: UUID,
+        paneId: UUID,
+        orientation: SplitOrientation,
+        position: SplitChildPosition = .second
+    ) {
         if let surfaceId = surfaceManager.splitPane(
             workspaceId: workspaceId,
             paneId: paneId,
             orientation: orientation,
+            position: position,
             newSurface: configuredDefaultSurface(),
             workspaces: &workspaces,
             persistence: persistence

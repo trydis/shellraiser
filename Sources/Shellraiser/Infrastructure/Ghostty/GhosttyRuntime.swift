@@ -195,7 +195,11 @@ final class GhosttyRuntime {
         initializeIfNeeded()
         guard let app else { return nil }
 
-        let command = commandString(for: terminalConfig)
+        let workingDirectory = Self.effectiveWorkingDirectory(from: terminalConfig.workingDirectory)
+        let command = Self.launchCommand(
+            shell: terminalConfig.shell,
+            workingDirectory: workingDirectory
+        )
         let environment = mergedEnvironment(
             for: terminalConfig,
             surfaceId: surfaceModel.id
@@ -203,7 +207,7 @@ final class GhosttyRuntime {
 
         let created: ghostty_surface_t? = withSurfaceConfig(
             view: view,
-            workingDirectory: terminalConfig.workingDirectory,
+            workingDirectory: workingDirectory,
             command: command,
             environment: environment
         ) { config in
@@ -957,9 +961,39 @@ final class GhosttyRuntime {
         }
     }
 
-    /// Creates a shell command that always starts a plain interactive shell.
-    private func commandString(for terminalConfig: TerminalPanelConfig) -> String {
-        "\(terminalConfig.shell.shellEscaped) -l"
+    /// Creates the shell command passed into Ghostty surface creation.
+    ///
+    /// Ghostty's embedded API treats the provided command as a shell command,
+    /// not a direct executable path. On macOS that command is additionally
+    /// wrapped in login-shell startup behavior. To make an explicit working
+    /// directory reliable, we enforce `cd` inside the launched command before
+    /// handing execution to the requested shell.
+    static func launchCommand(for terminalConfig: TerminalPanelConfig) -> String {
+        launchCommand(
+            shell: terminalConfig.shell,
+            workingDirectory: effectiveWorkingDirectory(from: terminalConfig.workingDirectory)
+        )
+    }
+
+    /// Creates the effective working directory used by runtime launch paths.
+    static func effectiveWorkingDirectory(from workingDirectory: String) -> String? {
+        let trimmedWorkingDirectory = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedWorkingDirectory.isEmpty else {
+            return nil
+        }
+        return workingDirectory
+    }
+
+    /// Creates the shell command passed into Ghostty surface creation from normalized inputs.
+    private static func launchCommand(shell: String, workingDirectory: String?) -> String {
+        let escapedShell = shell.shellEscaped
+
+        guard let workingDirectory else {
+            return escapedShell
+        }
+
+        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(escapedShell)"
+        return "\("/bin/sh".shellEscaped) -lc \(script.shellEscaped)"
     }
 
     /// Merges runtime environment variables for terminal launch.
@@ -1012,7 +1046,7 @@ final class GhosttyRuntime {
     /// Constructs `ghostty_surface_config_s` with temporary C string storage.
     private func withSurfaceConfig<T>(
         view: LibghosttySurfaceView,
-        workingDirectory: String,
+        workingDirectory: String?,
         command: String?,
         environment: [String: String],
         body: (inout ghostty_surface_config_s) -> T
