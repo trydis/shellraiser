@@ -17,6 +17,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     private var onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
+    private var didInterpretCommand = false
 
     /// Stable identifier for the surface hosted by this view.
     var surfaceId: UUID { surfaceModel.id }
@@ -177,10 +178,15 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         }
 
         keyTextAccumulator = []
-        defer { keyTextAccumulator = nil }
+        didInterpretCommand = false
+        defer {
+            keyTextAccumulator = nil
+            didInterpretCommand = false
+        }
 
         interpretKeyEvents([translatedEvent])
         syncPreedit(clearIfNeeded: markedTextBefore)
+        let composing = Self.isComposing(markedTextLength: markedText.length, markedTextBefore: markedTextBefore)
 
         if let textEvents = keyTextAccumulator, !textEvents.isEmpty {
             for text in textEvents {
@@ -197,13 +203,28 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             return
         }
 
+        if didInterpretCommand {
+            onUserInput()
+            GhosttyRuntime.shared.sendKeyEvent(
+                surfaceId: surfaceModel.id,
+                event: event,
+                action: action,
+                composing: composing,
+                modifiersOverride: translatedEvent.modifierFlags
+            )
+            return
+        }
+
         onUserInput()
         GhosttyRuntime.shared.sendKeyEvent(
             surfaceId: surfaceModel.id,
             event: event,
             action: action,
-            text: translatedEvent.characters ?? "",
-            composing: markedText.length > 0 || markedTextBefore,
+            text: Self.fallbackTextPayload(
+                interpretedCommand: didInterpretCommand,
+                characters: translatedEvent.characters
+            ),
+            composing: composing,
             modifiersOverride: translatedEvent.modifierFlags
         )
     }
@@ -645,8 +666,22 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         }
     }
 
-    /// Handles command selectors from AppKit text system without beeping.
-    override func doCommand(by selector: Selector) {}
+    /// Marks interpreted AppKit commands so the original key event is forwarded without text.
+    override func doCommand(by selector: Selector) {
+        _ = selector
+        didInterpretCommand = true
+    }
+
+    /// Chooses the fallback text payload for interpreted key events.
+    static func fallbackTextPayload(interpretedCommand: Bool, characters: String?) -> String? {
+        guard !interpretedCommand else { return nil }
+        return characters ?? ""
+    }
+
+    /// Returns whether the current key path is handling an active IME composition.
+    static func isComposing(markedTextLength: Int, markedTextBefore: Bool) -> Bool {
+        markedTextLength > 0 || markedTextBefore
+    }
 
     /// Returns whether the terminal currently has a text selection.
     private var hasSelection: Bool {
