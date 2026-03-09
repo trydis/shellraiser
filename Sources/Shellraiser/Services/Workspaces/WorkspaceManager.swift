@@ -67,7 +67,7 @@ final class WorkspaceManager: ObservableObject {
     @Published var isCommandPalettePresented = false
     @Published var pendingWorkspaceDeletion: WorkspaceDeletionRequest?
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
-    @Published var gitBranchNamesBySurfaceId: [UUID: String] = [:]
+    @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
 
     let persistence: WorkspacePersistence
     let workspaceCatalog: WorkspaceCatalogManager

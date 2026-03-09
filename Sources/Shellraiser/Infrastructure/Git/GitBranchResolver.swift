@@ -1,6 +1,17 @@
 import Foundation
 
-/// Resolves the current Git branch for a working directory using repository metadata.
+/// Resolved Git state for one working directory.
+struct ResolvedGitState: Equatable {
+    let branchName: String?
+    let isLinkedWorktree: Bool
+
+    /// Returns whether any Git metadata should be shown in the sidebar.
+    var hasVisibleMetadata: Bool {
+        branchName != nil || isLinkedWorktree
+    }
+}
+
+/// Resolves visible Git metadata for a working directory using repository metadata.
 struct GitBranchResolver {
     private let fileManager: FileManager
 
@@ -9,14 +20,14 @@ struct GitBranchResolver {
         self.fileManager = fileManager
     }
 
-    /// Returns the checked-out branch name for a working directory, or `nil` when unavailable.
-    func branchName(forWorkingDirectory workingDirectory: String) -> String? {
+    /// Returns the visible Git state for a working directory, or `nil` when it is not inside a repository.
+    func resolveGitState(forWorkingDirectory workingDirectory: String) -> ResolvedGitState? {
         let trimmedPath = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPath.isEmpty else { return nil }
 
         let directoryURL = URL(fileURLWithPath: trimmedPath, isDirectory: true)
-        guard let gitMetadataURL = gitMetadataURL(startingAt: directoryURL),
-              let headContents = readTextFile(at: gitMetadataURL.appendingPathComponent("HEAD")) else {
+        guard let repository = repositoryMetadata(startingAt: directoryURL),
+              let headContents = readTextFile(at: repository.gitMetadataURL.appendingPathComponent("HEAD")) else {
             return nil
         }
 
@@ -26,18 +37,36 @@ struct GitBranchResolver {
             .first?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        guard headLine.hasPrefix("ref:") else { return nil }
-        let reference = headLine
-            .dropFirst("ref:".count)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let branchName: String? = {
+            guard headLine.hasPrefix("ref:") else { return nil }
+            let reference = headLine
+                .dropFirst("ref:".count)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard reference.hasPrefix("refs/heads/") else { return nil }
-        let branchName = String(reference.dropFirst("refs/heads/".count))
-        return branchName.isEmpty ? nil : branchName
+            guard reference.hasPrefix("refs/heads/") else { return nil }
+            let branchName = String(reference.dropFirst("refs/heads/".count))
+            return branchName.isEmpty ? nil : branchName
+        }()
+
+        return ResolvedGitState(
+            branchName: branchName,
+            isLinkedWorktree: repository.isLinkedWorktree
+        )
+    }
+
+    /// Returns the checked-out branch name for a working directory, or `nil` when unavailable.
+    func branchName(forWorkingDirectory workingDirectory: String) -> String? {
+        resolveGitState(forWorkingDirectory: workingDirectory)?.branchName
+    }
+
+    /// Repository metadata derived from `.git` discovery.
+    private struct RepositoryMetadata {
+        let gitMetadataURL: URL
+        let isLinkedWorktree: Bool
     }
 
     /// Walks up parent directories until Git metadata is found.
-    private func gitMetadataURL(startingAt directoryURL: URL) -> URL? {
+    private func repositoryMetadata(startingAt directoryURL: URL) -> RepositoryMetadata? {
         var currentURL = normalizedDirectoryURL(for: directoryURL)
 
         while true {
@@ -45,7 +74,7 @@ struct GitBranchResolver {
             var isDirectory: ObjCBool = false
             if fileManager.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) {
                 if isDirectory.boolValue {
-                    return gitURL
+                    return RepositoryMetadata(gitMetadataURL: gitURL, isLinkedWorktree: false)
                 }
 
                 return resolveGitFile(at: gitURL)
@@ -71,7 +100,7 @@ struct GitBranchResolver {
     }
 
     /// Resolves `.git` indirection files used by worktrees and submodules.
-    private func resolveGitFile(at gitFileURL: URL) -> URL? {
+    private func resolveGitFile(at gitFileURL: URL) -> RepositoryMetadata? {
         guard let contents = readTextFile(at: gitFileURL) else { return nil }
 
         let line = contents
@@ -87,11 +116,30 @@ struct GitBranchResolver {
         guard !gitDirectory.isEmpty else { return nil }
 
         if gitDirectory.hasPrefix("/") {
-            return URL(fileURLWithPath: gitDirectory, isDirectory: true)
+            let resolvedURL = URL(fileURLWithPath: gitDirectory, isDirectory: true)
+            return RepositoryMetadata(
+                gitMetadataURL: resolvedURL,
+                isLinkedWorktree: isLinkedWorktreeDirectory(resolvedURL)
+            )
         }
 
-        return URL(fileURLWithPath: gitDirectory, relativeTo: gitFileURL.deletingLastPathComponent())
+        let resolvedURL = URL(fileURLWithPath: gitDirectory, relativeTo: gitFileURL.deletingLastPathComponent())
             .standardizedFileURL
+        return RepositoryMetadata(
+            gitMetadataURL: resolvedURL,
+            isLinkedWorktree: isLinkedWorktreeDirectory(resolvedURL)
+        )
+    }
+
+    /// Returns whether a resolved gitdir belongs to a linked `git worktree` checkout.
+    private func isLinkedWorktreeDirectory(_ gitMetadataURL: URL) -> Bool {
+        let pathComponents = gitMetadataURL.standardizedFileURL.pathComponents
+        guard let gitIndex = pathComponents.lastIndex(of: ".git"),
+              gitIndex + 1 < pathComponents.count else {
+            return false
+        }
+
+        return pathComponents[gitIndex + 1] == "worktrees"
     }
 
     /// Reads a UTF-8 text file and trims invalid or unreadable paths to `nil`.

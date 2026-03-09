@@ -1,18 +1,18 @@
 import Foundation
 
-/// Git branch resolution and focused-surface branch caching for workspace rows.
+/// Git metadata resolution and focused-surface caching for workspace rows.
 extension WorkspaceManager {
-    /// Returns the focused surface's resolved branch for a workspace when available.
-    func focusedBranchName(workspaceId: UUID) -> String? {
+    /// Returns the focused surface's resolved Git state for a workspace when available.
+    func focusedGitState(workspaceId: UUID) -> ResolvedGitState? {
         guard let workspace = workspace(id: workspaceId),
               let surfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId() else {
             return nil
         }
 
-        return gitBranchNamesBySurfaceId[surfaceId]
+        return gitStatesBySurfaceId[surfaceId]
     }
 
-    /// Seeds or refreshes branch state for each workspace's focused surface.
+    /// Seeds or refreshes Git state for each workspace's focused surface.
     func refreshFocusedWorkspaceGitBranches() {
         for workspace in workspaces {
             guard let surfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId(),
@@ -28,12 +28,12 @@ extension WorkspaceManager {
         }
     }
 
-    /// Refreshes the resolved branch for a surface working directory.
+    /// Refreshes the resolved Git state for a surface working directory.
     func refreshGitBranch(workspaceId: UUID, surfaceId: UUID, workingDirectory: String) {
         let requestedWorkingDirectory = workingDirectory
 
         Task.detached(priority: .utility) {
-            let branchName = GitBranchResolver().branchName(forWorkingDirectory: requestedWorkingDirectory)
+            let gitState = GitBranchResolver().resolveGitState(forWorkingDirectory: requestedWorkingDirectory)
             await MainActor.run {
                 guard let workspace = self.workspace(id: workspaceId),
                       let surface = self.surface(in: workspace.rootPane, surfaceId: surfaceId),
@@ -41,14 +41,14 @@ extension WorkspaceManager {
                     return
                 }
 
-                self.gitBranchNamesBySurfaceId[surfaceId] = branchName
+                self.gitStatesBySurfaceId[surfaceId] = gitState
             }
         }
     }
 
-    /// Removes cached branch state for a surface that is no longer present.
+    /// Removes cached Git state for a surface that is no longer present.
     func clearGitBranch(surfaceId: UUID) {
-        gitBranchNamesBySurfaceId.removeValue(forKey: surfaceId)
+        gitStatesBySurfaceId.removeValue(forKey: surfaceId)
     }
 
     /// Returns a surface snapshot by identifier anywhere in a pane tree.

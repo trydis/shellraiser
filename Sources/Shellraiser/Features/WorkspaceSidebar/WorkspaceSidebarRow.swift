@@ -5,7 +5,7 @@ struct WorkspaceSidebarRow: View {
     let workspace: WorkspaceModel
     let displayIndex: Int
     let isSelected: Bool
-    let focusedBranchName: String?
+    let focusedGitState: ResolvedGitState?
     let pendingCount: Int
     let onSelect: () -> Void
     let onRename: () -> Void
@@ -19,6 +19,11 @@ struct WorkspaceSidebarRow: View {
     /// Number of panes rendered in the workspace tree.
     private var paneCount: Int {
         paneCount(for: workspace.rootPane)
+    }
+
+    /// Returns whether the row should render a dedicated Git metadata line.
+    private var showsGitMetadata: Bool {
+        focusedGitState?.hasVisibleMetadata ?? false
     }
 
     var body: some View {
@@ -39,12 +44,13 @@ struct WorkspaceSidebarRow: View {
                         .foregroundStyle(isSelected ? AppTheme.textPrimary : AppTheme.textPrimary.opacity(0.92))
                         .lineLimit(1)
 
+                    if showsGitMetadata {
+                        gitMetadataRow
+                    }
+
                     HStack(spacing: 8) {
                         StatPill(title: "P", value: "\(paneCount)")
                         StatPill(title: "T", value: "\(surfaceCount)")
-                        if let focusedBranchName {
-                            BranchChip(branchName: focusedBranchName)
-                        }
                         if pendingCount > 0 {
                             StatPill(title: "Q", value: "\(pendingCount)", emphasized: true)
                         }
@@ -95,33 +101,48 @@ struct WorkspaceSidebarRow: View {
             return paneCount(for: split.first) + paneCount(for: split.second)
         }
     }
+
+    /// Renders the focused surface's Git metadata above the structural stat chips.
+    private var gitMetadataRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let branchName = focusedGitState?.branchName {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(AppTheme.highlight)
+
+                    Text(branchName)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            if focusedGitState?.isLinkedWorktree == true {
+                WorktreeChip()
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
 }
 
-/// Compact Git branch chip shown for the focused surface inside a workspace row.
-private struct BranchChip: View {
-    let branchName: String
-
+/// Compact linked-worktree indicator shown beside the focused branch metadata.
+private struct WorktreeChip: View {
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(AppTheme.highlight)
-
-            Text(branchName)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.08))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(AppTheme.stroke, lineWidth: 1)
-        )
+        Image(systemName: "rectangle.on.rectangle")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(AppTheme.highlight)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(AppTheme.stroke, lineWidth: 1)
+            )
     }
 }

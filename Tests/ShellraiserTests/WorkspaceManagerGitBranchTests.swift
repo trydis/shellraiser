@@ -1,11 +1,11 @@
 import XCTest
 @testable import Shellraiser
 
-/// Covers manager-owned Git branch caching for focused workspace surfaces.
+/// Covers manager-owned Git state caching for focused workspace surfaces.
 @MainActor
 final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
-    /// Verifies the sidebar resolves branch state from the workspace's focused surface.
-    func testFocusedBranchNameUsesFocusedSurface() {
+    /// Verifies the sidebar resolves Git state from the workspace's focused surface.
+    func testFocusedGitStateUsesFocusedSurface() {
         let manager = makeWorkspaceManager()
         let firstSurface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001301")!, title: "One")
         let secondSurface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001302")!, title: "Two")
@@ -19,16 +19,19 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
             focusedSurfaceId: secondSurface.id
         )
         manager.workspaces = [workspace]
-        manager.gitBranchNamesBySurfaceId = [
-            firstSurface.id: "main",
-            secondSurface.id: "feature/sidebar"
+        manager.gitStatesBySurfaceId = [
+            firstSurface.id: ResolvedGitState(branchName: "main", isLinkedWorktree: false),
+            secondSurface.id: ResolvedGitState(branchName: "feature/sidebar", isLinkedWorktree: true)
         ]
 
-        XCTAssertEqual(manager.focusedBranchName(workspaceId: workspace.id), "feature/sidebar")
+        XCTAssertEqual(
+            manager.focusedGitState(workspaceId: workspace.id),
+            ResolvedGitState(branchName: "feature/sidebar", isLinkedWorktree: true)
+        )
     }
 
-    /// Verifies closing a surface clears its cached branch state.
-    func testCloseSurfaceClearsCachedBranchState() {
+    /// Verifies closing a surface clears its cached Git state.
+    func testCloseSurfaceClearsCachedGitState() {
         let manager = makeWorkspaceManager()
         let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001311")!)
         let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001312")!
@@ -40,10 +43,12 @@ final class WorkspaceManagerGitBranchTests: WorkspaceTestCase {
                 focusedSurfaceId: surface.id
             )
         ]
-        manager.gitBranchNamesBySurfaceId = [surface.id: "main"]
+        manager.gitStatesBySurfaceId = [
+            surface.id: ResolvedGitState(branchName: "main", isLinkedWorktree: false)
+        ]
 
         manager.closeSurface(workspaceId: workspaceId, paneId: paneId, surfaceId: surface.id)
 
-        XCTAssertNil(manager.gitBranchNamesBySurfaceId[surface.id])
+        XCTAssertNil(manager.gitStatesBySurfaceId[surface.id])
     }
 }
