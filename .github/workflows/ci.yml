@@ -70,11 +70,26 @@ jobs:
           path: ${{ steps.ghostty-meta.outputs.zig_dir }}
           key: ${{ runner.os }}-${{ steps.ghostty-meta.outputs.zig_arch }}-zig-${{ steps.ghostty-meta.outputs.zig_version }}
 
-      - name: Install Zig required by Ghostty
+      - name: Install minisign
         if: steps.zig-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          curl -L "https://ziglang.org/download/${{ steps.ghostty-meta.outputs.zig_version }}/zig-${{ steps.ghostty-meta.outputs.zig_arch }}-macos-${{ steps.ghostty-meta.outputs.zig_version }}.tar.xz" -o zig.tar.xz
+          if ! command -v minisign >/dev/null 2>&1; then
+            brew install minisign
+          fi
+
+      - name: Install Zig required by Ghostty
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        env:
+          ZIG_MINISIGN_PUBLIC_KEY: RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U
+        run: |
+          set -euo pipefail
+          zig_archive="zig-${{ steps.ghostty-meta.outputs.zig_arch }}-macos-${{ steps.ghostty-meta.outputs.zig_version }}.tar.xz"
+          zig_base_url="https://ziglang.org/download/${{ steps.ghostty-meta.outputs.zig_version }}"
+
+          curl -L "${zig_base_url}/${zig_archive}" -o zig.tar.xz
+          curl -L "${zig_base_url}/${zig_archive}.minisig" -o zig.tar.xz.minisig
+          minisign -Vm zig.tar.xz -x zig.tar.xz.minisig -P "$ZIG_MINISIGN_PUBLIC_KEY"
           tar -xf zig.tar.xz
 
       - name: Add Zig to PATH
