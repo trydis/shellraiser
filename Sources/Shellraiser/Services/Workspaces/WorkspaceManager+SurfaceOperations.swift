@@ -128,17 +128,19 @@ extension WorkspaceManager {
 
     /// Updates the tracked working directory for a surface and refreshes its Git branch state.
     func setSurfaceWorkingDirectory(workspaceId: UUID, surfaceId: UUID, workingDirectory: String) {
+        let normalizedWorkingDirectory = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         surfaceManager.setSurfaceWorkingDirectory(
             workspaceId: workspaceId,
             surfaceId: surfaceId,
-            workingDirectory: workingDirectory,
+            workingDirectory: normalizedWorkingDirectory,
             workspaces: &workspaces,
             persistence: persistence
         )
+        guard !normalizedWorkingDirectory.isEmpty else { return }
         refreshGitBranch(
             workspaceId: workspaceId,
             surfaceId: surfaceId,
-            workingDirectory: workingDirectory
+            workingDirectory: normalizedWorkingDirectory
         )
     }
 
