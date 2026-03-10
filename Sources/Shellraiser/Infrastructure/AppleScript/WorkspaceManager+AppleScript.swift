@@ -84,8 +84,9 @@ extension WorkspaceManager {
         name: String? = nil,
         configuration: ScriptableSurfaceConfiguration?
     ) -> UUID? {
+        let normalizedName = resolvedScriptWorkspaceName(name)
         let workspace = createWorkspace(
-            name: name ?? "Workspace",
+            name: normalizedName,
             initialSurface: makeScriptSurface(configuration: configuration)
         )
         selectWorkspace(workspace.id)
@@ -204,6 +205,12 @@ private extension WorkspaceManager {
             surface.terminalConfig.workingDirectory = configuration.initialWorkingDirectory
         }
         return surface
+    }
+
+    /// Resolves an optional scripted workspace name to a trimmed display title.
+    func resolvedScriptWorkspaceName(_ name: String?) -> String {
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedName.isEmpty ? "Workspace" : trimmedName
     }
 
     /// Maps script split directions onto pane orientation and insertion position.

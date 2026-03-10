@@ -38,6 +38,30 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         XCTAssertEqual(manager.workspaces.first?.name, "Workspace")
     }
 
+    /// Verifies scripted workspace creation trims names and falls back when only whitespace is provided.
+    func testCreateScriptWindowNormalizesWhitespaceOnlyNames() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+
+        let trimmedWorkspaceId = manager.createScriptWindow(
+            name: "  Review Session  ",
+            configuration: nil
+        )
+        let whitespaceWorkspaceId = manager.createScriptWindow(
+            name: "   \n\t   ",
+            configuration: nil
+        )
+
+        XCTAssertEqual(
+            manager.workspaces.first(where: { $0.id == trimmedWorkspaceId })?.name,
+            "Review Session"
+        )
+        XCTAssertEqual(
+            manager.workspaces.first(where: { $0.id == whitespaceWorkspaceId })?.name,
+            "Workspace"
+        )
+    }
+
     /// Verifies creating a workspace with a scripted surface configuration applies its working directory.
     func testNewWorkspaceAppliesSurfaceConfigurationWorkingDirectory() {
         let manager = makeWorkspaceManager()
