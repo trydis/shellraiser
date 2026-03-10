@@ -9,7 +9,7 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         let persistence = makePersistence()
         let runtimeBridge = MockAgentRuntimeBridge()
         let notifications = MockAgentCompletionNotificationManager()
-        let eventMonitor = MockAgentCompletionEventMonitor()
+        let eventMonitor = MockAgentActivityEventMonitor()
         let pendingSurface = makeSurface(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000001101")!,
             title: "Pending",
@@ -147,7 +147,7 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
     /// Verifies completion events for mounted surfaces enqueue notifications and advance the cursor.
     func testHandleCompletionEventEnqueuesNotificationForKnownSurface() {
         let notifications = MockAgentCompletionNotificationManager()
-        let eventMonitor = MockAgentCompletionEventMonitor()
+        let eventMonitor = MockAgentActivityEventMonitor()
         let manager = makeWorkspaceManager(
             notifications: notifications,
             eventMonitor: eventMonitor
@@ -169,10 +169,11 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         manager.nextPendingCompletionSequence = 4
 
         eventMonitor.emit(
-            AgentCompletionEvent(
+            AgentActivityEvent(
                 timestamp: Date(timeIntervalSince1970: 1_700_004_500),
                 agentType: .codex,
                 surfaceId: surface.id,
+                phase: .completed,
                 payload: "payload"
             )
         )
@@ -181,6 +182,100 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertEqual(notifications.scheduledNotifications.count, 1)
         XCTAssertEqual(notifications.scheduledNotifications.first?.workspaceName, "Known Workspace")
         XCTAssertEqual(manager.pendingCompletionTargets().map(\.surface.id), [surface.id])
+    }
+
+    /// Verifies activity events drive workspace-level busy state until completion arrives.
+    func testActivityEventsMarkWorkspaceBusyUntilCompletion() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001134")!,
+            title: "Busy Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001135")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001136")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Busy Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_510),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .started,
+                payload: ""
+            )
+        )
+
+        XCTAssertTrue(manager.isWorkspaceWorking(workspaceId: workspaceId))
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_520),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .completed,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
+    /// Verifies Codex terminal input marks the owning workspace busy until completion is observed.
+    func testNoteSurfaceActivityMarksCodexWorkspaceBusy() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001137")!,
+            title: "Codex Surface",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001138")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001139")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Codex Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.noteSurfaceActivity(workspaceId: workspaceId, surfaceId: surface.id)
+
+        XCTAssertTrue(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
+    /// Verifies closing a busy surface clears the workspace working indicator state.
+    func testCloseSurfaceClearsBusyWorkspaceState() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001140")!,
+            title: "Closing Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001147")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001148")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Closing Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.markSurfaceBusy(surface.id)
+
+        manager.closeSurface(workspaceId: workspaceId, paneId: paneId, surfaceId: surface.id)
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
     /// Verifies jumping to the next completed session selects and clears the head of the queue.

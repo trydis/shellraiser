@@ -163,7 +163,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         try data.write(to: fileURL, options: .atomic)
     }
 
-    /// Shell helper that appends normalized completion events to the shared event log.
+    /// Shell helper that appends normalized activity events to the shared event log.
     private var helperScriptContents: String {
         #"""
         #!/bin/sh
@@ -171,25 +171,36 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         runtime="${1:-unknown}"
         surface="${2:-}"
+        phase="${3:-}"
 
-        if [ -z "${SHELLRAISER_EVENT_LOG:-}" ] || [ -z "$surface" ]; then
+        if [ -z "${SHELLRAISER_EVENT_LOG:-}" ] || [ -z "$surface" ] || [ -z "$phase" ]; then
             exit 0
         fi
 
         payload=""
-        case "$runtime" in
+        case "$phase" in
+            started|completed)
+                ;;
+            *)
+                exit 0
+                ;;
+        esac
+
+        case "$runtime:$phase" in
+            codex:completed)
+                payload="${4:-}"
+                ;;
             codex)
-                payload="${3:-}"
                 ;;
         esac
 
         timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
         encoded="$(printf '%s' "$payload" | /usr/bin/base64 | tr -d '\n')"
-        printf '%s\t%s\t%s\t%s\n' "$timestamp" "$runtime" "$surface" "$encoded" >> "${SHELLRAISER_EVENT_LOG}"
+        printf '%s\t%s\t%s\t%s\t%s\n' "$timestamp" "$runtime" "$surface" "$phase" "$encoded" >> "${SHELLRAISER_EVENT_LOG}"
         """#
     }
 
-    /// Claude wrapper that injects the top-level `Stop` hook for the current surface.
+    /// Claude wrapper that injects top-level start and stop hooks for the current surface.
     private var claudeWrapperContents: String {
         #"""
         #!/bin/sh
@@ -224,12 +235,22 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         cat > "$settings_file" <<EOF
         {
           "hooks": {
+            "UserPromptSubmit": [
+              {
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" started"
+                  }
+                ]
+              }
+            ],
             "Stop": [
               {
                 "hooks": [
                   {
                     "type": "command",
-                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\""
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
                   }
                 ]
               }
@@ -268,7 +289,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
 
-        notify_config="notify=[\"$SHELLRAISER_HELPER_PATH\",\"codex\",\"$SHELLRAISER_SURFACE_ID\"]"
+        notify_config="notify=[\"$SHELLRAISER_HELPER_PATH\",\"codex\",\"$SHELLRAISER_SURFACE_ID\",\"completed\"]"
         exec "$real" -c "$notify_config" "$@"
         """#
     }

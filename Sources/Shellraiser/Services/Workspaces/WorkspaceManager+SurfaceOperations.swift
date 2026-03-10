@@ -28,6 +28,7 @@ extension WorkspaceManager {
         )
         completionNotifications.removeNotifications(for: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
+        clearBusySurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
 
         if let workspace = workspace(id: workspaceId),
@@ -113,6 +114,14 @@ extension WorkspaceManager {
             workspaces: &workspaces,
             persistence: persistence
         )
+
+        guard let workspace = workspace(id: workspaceId),
+              let surface = surface(in: workspace.rootPane, surfaceId: surfaceId),
+              surface.agentType == .codex else {
+            return
+        }
+
+        markSurfaceBusy(surfaceId)
     }
 
     /// Updates tab title using the current terminal title.

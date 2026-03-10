@@ -1,8 +1,15 @@
 import AppKit
 import Foundation
 
-/// Completion queue tracking and notification flows for the shared manager.
+/// Activity tracking, completion queue state, and notification flows for the shared manager.
 extension WorkspaceManager {
+    /// Returns whether any live surface in a workspace is currently marked busy.
+    func isWorkspaceWorking(workspaceId: UUID) -> Bool {
+        guard let workspace = workspace(id: workspaceId) else { return false }
+
+        return workspace.rootPane.allSurfaceIds().contains { busySurfaceIds.contains($0) }
+    }
+
     /// Enqueues a newly completed agent turn for notifications and FIFO navigation.
     func enqueueCompletion(
         workspaceId: UUID,
@@ -117,22 +124,31 @@ extension WorkspaceManager {
         return .none
     }
 
-    /// Consumes a managed wrapper completion event if the target surface still exists.
-    func handleCompletionEvent(_ event: AgentCompletionEvent) {
-        guard let target = completionTarget(for: event.surfaceId) else { return }
+    /// Consumes a managed wrapper activity event if the target surface still exists.
+    func handleAgentActivityEvent(_ event: AgentActivityEvent) {
+        guard let target = surfaceTarget(for: event.surfaceId) else {
+            clearBusySurface(event.surfaceId)
+            return
+        }
 
-        enqueueCompletion(
-            workspaceId: target.workspaceId,
-            surfaceId: event.surfaceId,
-            agentType: event.agentType,
-            timestamp: event.timestamp,
-            payload: event.payload
-        )
+        switch event.phase {
+        case .started:
+            markSurfaceBusy(event.surfaceId)
+        case .completed:
+            clearBusySurface(event.surfaceId)
+            enqueueCompletion(
+                workspaceId: target.workspaceId,
+                surfaceId: event.surfaceId,
+                agentType: event.agentType,
+                timestamp: event.timestamp,
+                payload: event.payload
+            )
+        }
     }
 
     /// Focuses a queued completion surface from notifications or jump actions.
     func focusCompletionSurface(_ surfaceId: UUID) {
-        guard let target = completionTarget(for: surfaceId) else { return }
+        guard let target = surfaceTarget(for: surfaceId) else { return }
         CompletionDebugLogger.log(
             "focus completion workspace=\(target.workspaceId.uuidString) surface=\(surfaceId.uuidString)"
         )
@@ -170,7 +186,7 @@ extension WorkspaceManager {
     }
 
     /// Returns pane/workspace routing data for any live surface identifier.
-    private func completionTarget(for surfaceId: UUID) -> (workspaceId: UUID, paneId: UUID)? {
+    private func surfaceTarget(for surfaceId: UUID) -> (workspaceId: UUID, paneId: UUID)? {
         for workspace in workspaces {
             if let paneId = workspace.rootPane.paneId(containing: surfaceId) {
                 return (workspace.id, paneId)
@@ -267,5 +283,20 @@ extension WorkspaceManager {
             return fadeStart < expiration && expiration > now
         }
         recentlyHandledSurfaceExpirations = recentlyHandledSurfaceExpirations.filter { $0.value > now }
+    }
+
+    /// Marks a surface as currently working.
+    func markSurfaceBusy(_ surfaceId: UUID) {
+        busySurfaceIds.insert(surfaceId)
+    }
+
+    /// Clears working state for one surface.
+    func clearBusySurface(_ surfaceId: UUID) {
+        busySurfaceIds.remove(surfaceId)
+    }
+
+    /// Clears working state for a group of surfaces.
+    func clearBusySurfaces<S: Sequence>(_ surfaceIds: S) where S.Element == UUID {
+        busySurfaceIds.subtract(surfaceIds)
     }
 }
