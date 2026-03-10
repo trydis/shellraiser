@@ -4,8 +4,8 @@ import XCTest
 /// Covers managed-agent wrapper generation for runtime integration.
 @MainActor
 final class AgentRuntimeBridgeTests: XCTestCase {
-    /// Verifies the Claude wrapper emits top-level start/stop hooks without subagent hooks.
-    func testPrepareRuntimeSupportWritesClaudeWrapperWithoutSubagentStopHook() throws {
+    /// Verifies the Claude wrapper emits start, stop, permission-request, and selected notification hooks.
+    func testPrepareRuntimeSupportWritesClaudeWrapperWithMappedNotificationHooks() throws {
         let bridge = AgentRuntimeBridge.shared
         let wrapperURL = bridge.binDirectory.appendingPathComponent("claude")
 
@@ -17,6 +17,11 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         XCTAssertTrue(wrapperContents.contains("\"UserPromptSubmit\""))
         XCTAssertTrue(wrapperContents.contains("\"Stop\""))
+        XCTAssertTrue(wrapperContents.contains("\"PermissionRequest\""))
+        XCTAssertTrue(wrapperContents.contains("\"matcher\": \"*\""))
+        XCTAssertTrue(wrapperContents.contains("\"Notification\""))
+        XCTAssertTrue(wrapperContents.contains("\"matcher\": \"permission_prompt\""))
+        XCTAssertTrue(wrapperContents.contains("\"matcher\": \"elicitation_dialog\""))
         XCTAssertFalse(wrapperContents.contains("\"SubagentStop\""))
     }
 
