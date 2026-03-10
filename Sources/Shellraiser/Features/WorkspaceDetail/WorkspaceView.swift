@@ -73,13 +73,13 @@ struct WorkspaceView: View {
         }
     }
 
-    /// Returns the tree node that should be rendered for the current zoom state.
+    /// Returns the full pane tree, passing zoom state down to collapse non-zoomed branches.
     @ViewBuilder
     private func displayedPaneNode(for workspace: WorkspaceModel) -> some View {
-        let node = workspace.zoomedPaneId.flatMap { workspace.rootPane.paneNode(id: $0) } ?? workspace.rootPane
         PaneNodeView(
             workspaceId: workspace.id,
-            node: node,
+            node: workspace.rootPane,
+            zoomedPaneId: workspace.zoomedPaneId,
             manager: manager
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

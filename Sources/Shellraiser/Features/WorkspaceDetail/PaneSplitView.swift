@@ -5,6 +5,8 @@ import SwiftUI
 struct PaneSplitView: View {
     let workspaceId: UUID
     let split: PaneSplitModel
+    /// When set, collapses the non-zoomed child to zero size so the terminal stays mounted.
+    let zoomedPaneId: UUID?
     @ObservedObject var manager: WorkspaceManager
 
     @State private var dragRatio: Double?
@@ -22,6 +24,18 @@ struct PaneSplitView: View {
         return min(0.9, max(0.1, value))
     }
 
+    /// Whether zoom is active and the first child contains the zoomed pane.
+    private var firstIsZoomed: Bool {
+        guard let zoomedPaneId else { return false }
+        return split.first.containsPane(zoomedPaneId)
+    }
+
+    /// Whether zoom is active and the second child contains the zoomed pane.
+    private var secondIsZoomed: Bool {
+        guard let zoomedPaneId else { return false }
+        return split.second.containsPane(zoomedPaneId)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             if split.orientation == .horizontal {
@@ -35,44 +49,54 @@ struct PaneSplitView: View {
 
     /// Builds a horizontal split layout.
     private func horizontalContent(in size: CGSize) -> some View {
-        let usableWidth = max(0, size.width - dividerThickness)
-        let firstWidth = usableWidth * activeRatio
-        let secondWidth = max(0, usableWidth - firstWidth)
+        let isZoomed = firstIsZoomed || secondIsZoomed
+        let usableWidth = max(0, size.width - (isZoomed ? 0 : dividerThickness))
+        let firstWidth: CGFloat = isZoomed ? (firstIsZoomed ? usableWidth : 0) : usableWidth * activeRatio
+        let secondWidth: CGFloat = isZoomed ? (secondIsZoomed ? usableWidth : 0) : max(0, usableWidth - firstWidth)
 
         return HStack(spacing: 0) {
-            PaneNodeView(workspaceId: workspaceId, node: split.first, manager: manager)
+            PaneNodeView(workspaceId: workspaceId, node: split.first, zoomedPaneId: zoomedPaneId, manager: manager)
                 .frame(width: firstWidth)
                 .frame(maxHeight: .infinity)
+                .clipped()
 
-            SplitDivider(chromeStyle: chromeStyle, isHorizontal: true)
-                .frame(width: dividerThickness)
-                .gesture(dividerDragGesture(total: usableWidth, horizontal: true))
+            if !isZoomed {
+                SplitDivider(chromeStyle: chromeStyle, isHorizontal: true)
+                    .frame(width: dividerThickness)
+                    .gesture(dividerDragGesture(total: usableWidth, horizontal: true))
+            }
 
-            PaneNodeView(workspaceId: workspaceId, node: split.second, manager: manager)
+            PaneNodeView(workspaceId: workspaceId, node: split.second, zoomedPaneId: zoomedPaneId, manager: manager)
                 .frame(width: secondWidth)
                 .frame(maxHeight: .infinity)
+                .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// Builds a vertical split layout.
     private func verticalContent(in size: CGSize) -> some View {
-        let usableHeight = max(0, size.height - dividerThickness)
-        let firstHeight = usableHeight * activeRatio
-        let secondHeight = max(0, usableHeight - firstHeight)
+        let isZoomed = firstIsZoomed || secondIsZoomed
+        let usableHeight = max(0, size.height - (isZoomed ? 0 : dividerThickness))
+        let firstHeight: CGFloat = isZoomed ? (firstIsZoomed ? usableHeight : 0) : usableHeight * activeRatio
+        let secondHeight: CGFloat = isZoomed ? (secondIsZoomed ? usableHeight : 0) : max(0, usableHeight - firstHeight)
 
         return VStack(spacing: 0) {
-            PaneNodeView(workspaceId: workspaceId, node: split.first, manager: manager)
+            PaneNodeView(workspaceId: workspaceId, node: split.first, zoomedPaneId: zoomedPaneId, manager: manager)
                 .frame(height: firstHeight)
                 .frame(maxWidth: .infinity)
+                .clipped()
 
-            SplitDivider(chromeStyle: chromeStyle, isHorizontal: false)
-                .frame(height: dividerThickness)
-                .gesture(dividerDragGesture(total: usableHeight, horizontal: false))
+            if !isZoomed {
+                SplitDivider(chromeStyle: chromeStyle, isHorizontal: false)
+                    .frame(height: dividerThickness)
+                    .gesture(dividerDragGesture(total: usableHeight, horizontal: false))
+            }
 
-            PaneNodeView(workspaceId: workspaceId, node: split.second, manager: manager)
+            PaneNodeView(workspaceId: workspaceId, node: split.second, zoomedPaneId: zoomedPaneId, manager: manager)
                 .frame(height: secondHeight)
                 .frame(maxWidth: .infinity)
+                .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
