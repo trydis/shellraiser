@@ -198,7 +198,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         """#
     }
 
-    /// Claude wrapper that injects top-level start and stop hooks for the current surface.
+    /// Claude wrapper that injects managed activity hooks for the current surface.
     private var claudeWrapperContents: String {
         #"""
         #!/bin/sh
@@ -245,6 +245,37 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             ],
             "Stop": [
               {
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                  }
+                ]
+              }
+            ],
+            "PermissionRequest": [
+              {
+                "matcher": "*",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                  }
+                ]
+              }
+            ],
+            "Notification": [
+              {
+                "matcher": "permission_prompt",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                  }
+                ]
+              },
+              {
+                "matcher": "elicitation_dialog",
                 "hooks": [
                   {
                     "type": "command",
