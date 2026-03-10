@@ -112,7 +112,7 @@ class WorkspaceTestCase: XCTestCase {
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: MockAgentRuntimeBridge? = nil,
         notifications: MockAgentCompletionNotificationManager? = nil,
-        eventMonitor: MockAgentCompletionEventMonitor? = nil,
+        eventMonitor: MockAgentActivityEventMonitor? = nil,
         gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
@@ -123,7 +123,7 @@ class WorkspaceTestCase: XCTestCase {
             surfaceManager: surfaceManager,
             runtimeBridge: runtimeBridge ?? MockAgentRuntimeBridge(),
             completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
-            completionEventMonitor: eventMonitor ?? MockAgentCompletionEventMonitor(),
+            activityEventMonitor: eventMonitor ?? MockAgentActivityEventMonitor(),
             registersLocalShortcutMonitor: false,
             gitStateResolver: gitStateResolver
         )
@@ -179,12 +179,12 @@ final class MockAgentCompletionNotificationManager: AgentCompletionNotificationM
     }
 }
 
-/// Completion-event monitor test double that allows tests to trigger callbacks manually.
-final class MockAgentCompletionEventMonitor: AgentCompletionEventMonitoring {
-    var onEvent: ((AgentCompletionEvent) -> Void)?
+/// Activity-event monitor test double that allows tests to trigger callbacks manually.
+final class MockAgentActivityEventMonitor: AgentActivityEventMonitoring {
+    var onEvent: ((AgentActivityEvent) -> Void)?
 
-    /// Emits a synthetic completion event into the manager under test.
-    func emit(_ event: AgentCompletionEvent) {
+    /// Emits a synthetic activity event into the manager under test.
+    func emit(_ event: AgentActivityEvent) {
         onEvent?(event)
     }
 }

@@ -1,8 +1,8 @@
 import Foundation
 
-/// Poll-based monitor that tails the shared completion event log from managed agent wrappers.
-final class AgentCompletionEventMonitor: AgentCompletionEventMonitoring {
-    var onEvent: ((AgentCompletionEvent) -> Void)?
+/// Poll-based monitor that tails the shared activity event log from managed agent wrappers.
+final class AgentCompletionEventMonitor: AgentActivityEventMonitoring {
+    var onEvent: ((AgentActivityEvent) -> Void)?
 
     private let logURL: URL
     private let queue = DispatchQueue(label: "com.shellraiser.completion-event-monitor")
@@ -23,7 +23,7 @@ final class AgentCompletionEventMonitor: AgentCompletionEventMonitoring {
         closeDescriptorIfNeeded()
     }
 
-    /// Starts watching the completion log from the current end of file so historical events are ignored.
+    /// Starts watching the activity log from the current end of file so historical events are ignored.
     private func start() {
         rebuildWatchSource(seekToEnd: true)
     }
@@ -62,7 +62,7 @@ final class AgentCompletionEventMonitor: AgentCompletionEventMonitoring {
         source.resume()
     }
 
-    /// Handles filesystem changes and consumes any newly appended completion events.
+    /// Handles filesystem changes and consumes any newly appended activity events.
     private func handleFileSystemEvent() {
         let flags = source?.data ?? []
 
@@ -75,7 +75,7 @@ final class AgentCompletionEventMonitor: AgentCompletionEventMonitoring {
         consumePendingEvents()
     }
 
-    /// Reads newly appended log data and emits parsed completion events on the main actor.
+    /// Reads newly appended log data and emits parsed activity events on the main actor.
     private func consumePendingEvents() {
         guard let handle = try? FileHandle(forReadingFrom: logURL) else { return }
         defer {
@@ -106,9 +106,9 @@ final class AgentCompletionEventMonitor: AgentCompletionEventMonitoring {
             : lines.dropLast().map(String.init)
 
         for line in completeLines where !line.isEmpty {
-            guard let event = AgentCompletionEvent.parse(line) else { continue }
+            guard let event = AgentActivityEvent.parse(line) else { continue }
             CompletionDebugLogger.log(
-                "event runtime=\(event.agentType.rawValue) surface=\(event.surfaceId.uuidString)"
+                "event runtime=\(event.agentType.rawValue) phase=\(event.phase.rawValue) surface=\(event.surfaceId.uuidString)"
             )
             Task { @MainActor in
                 self.onEvent?(event)

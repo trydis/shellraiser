@@ -3,17 +3,17 @@ import Foundation
 /// Minimal runtime bridge contract required by app orchestration.
 @MainActor
 protocol AgentRuntimeSupporting {
-    /// Shared completion log used by managed agent wrappers.
+    /// Shared activity log used by managed agent wrappers.
     var eventLogURL: URL { get }
 
     /// Ensures runtime helper scripts and files are ready for use.
     func prepareRuntimeSupport()
 }
 
-/// Completion event monitor contract consumed by the workspace manager.
-protocol AgentCompletionEventMonitoring: AnyObject {
-    /// Callback fired for each parsed completion event.
-    var onEvent: ((AgentCompletionEvent) -> Void)? { get set }
+/// Activity event monitor contract consumed by the workspace manager.
+protocol AgentActivityEventMonitoring: AnyObject {
+    /// Callback fired for each parsed runtime activity event.
+    var onEvent: ((AgentActivityEvent) -> Void)? { get set }
 }
 
 /// Notification manager contract consumed by the workspace manager.

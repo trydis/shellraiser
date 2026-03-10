@@ -42,6 +42,7 @@ struct WorkspaceListView: View {
                             displayIndex: index + 1,
                             isSelected: manager.window.selectedWorkspaceId == workspace.id,
                             focusedGitState: manager.focusedGitState(workspaceId: workspace.id),
+                            isWorking: manager.isWorkspaceWorking(workspaceId: workspace.id),
                             pendingCount: manager.pendingCompletionCount(workspaceId: workspace.id),
                             onSelect: {
                                 withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {

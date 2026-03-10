@@ -6,37 +6,30 @@ struct WorkspaceSidebarRow: View {
     let displayIndex: Int
     let isSelected: Bool
     let focusedGitState: ResolvedGitState?
+    let isWorking: Bool
     let pendingCount: Int
     let onSelect: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
-
-    /// Number of tabs in the workspace used for compact metadata.
-    private var surfaceCount: Int {
-        workspace.rootPane.allSurfaceIds().count
-    }
-
-    /// Number of panes rendered in the workspace tree.
-    private var paneCount: Int {
-        paneCount(for: workspace.rootPane)
-    }
 
     /// Returns whether the row should render a dedicated Git metadata line.
     private var showsGitMetadata: Bool {
         focusedGitState?.hasVisibleMetadata ?? false
     }
 
+    /// Returns whether the row should render a dedicated status line.
+    private var showsStatusRow: Bool {
+        pendingCount > 0
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .center, spacing: 10) {
-                Text("\(displayIndex)")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? Color.black.opacity(0.82) : AppTheme.textSecondary)
-                    .frame(width: 20, height: 20)
-                    .background(
-                        Circle()
-                            .fill(isSelected ? AnyShapeStyle(AppTheme.accentGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
-                    )
+                WorkspaceIndexBadge(
+                    displayIndex: displayIndex,
+                    isSelected: isSelected,
+                    isWorking: isWorking
+                )
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(workspace.name)
@@ -48,12 +41,8 @@ struct WorkspaceSidebarRow: View {
                         gitMetadataRow
                     }
 
-                    HStack(spacing: 8) {
-                        StatPill(title: "P", value: "\(paneCount)")
-                        StatPill(title: "T", value: "\(surfaceCount)")
-                        if pendingCount > 0 {
-                            StatPill(title: "Q", value: "\(pendingCount)", emphasized: true)
-                        }
+                    if showsStatusRow {
+                        statusRow
                     }
                 }
 
@@ -92,17 +81,7 @@ struct WorkspaceSidebarRow: View {
         }
     }
 
-    /// Counts leaf panes recursively for compact workspace metadata.
-    private func paneCount(for node: PaneNodeModel) -> Int {
-        switch node {
-        case .leaf:
-            return 1
-        case .split(let split):
-            return paneCount(for: split.first) + paneCount(for: split.second)
-        }
-    }
-
-    /// Renders the focused surface's Git metadata above the structural stat chips.
+    /// Renders the focused surface's Git metadata above the optional status indicators.
     private var gitMetadataRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             if let branchName = focusedGitState?.branchName {
@@ -126,6 +105,71 @@ struct WorkspaceSidebarRow: View {
             Spacer(minLength: 0)
         }
     }
+
+    /// Renders workspace-level working and pending-completion indicators.
+    private var statusRow: some View {
+        HStack(spacing: 10) {
+            if pendingCount > 0 {
+                WorkspacePendingIndicator()
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// Leading workspace badge that shows either the static circle or the working indicator.
+private struct WorkspaceIndexBadge: View {
+    let displayIndex: Int
+    let isSelected: Bool
+    let isWorking: Bool
+
+    /// Foreground color used for the badge number.
+    private var numberColor: Color {
+        if isWorking {
+            return AppTheme.textPrimary
+        }
+
+        if isSelected {
+            return Color.black.opacity(0.82)
+        }
+
+        return AppTheme.textSecondary
+    }
+
+    /// Background treatment used for the badge footprint.
+    private var badgeBackground: some View {
+        Circle()
+            .fill(backgroundStyle)
+    }
+
+    /// Fill style for the badge background.
+    private var backgroundStyle: AnyShapeStyle {
+        if isWorking {
+            return AnyShapeStyle(Color.clear)
+        }
+
+        if isSelected {
+            return AnyShapeStyle(AppTheme.accentGradient)
+        }
+
+        return AnyShapeStyle(Color.white.opacity(0.08))
+    }
+
+    var body: some View {
+        ZStack {
+            badgeBackground
+
+            if isWorking {
+                WorkspaceWorkingIndicator()
+            }
+
+            Text("\(displayIndex)")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(numberColor)
+        }
+        .frame(width: 20, height: 20)
+    }
 }
 
 /// Compact linked-worktree indicator shown beside the focused branch metadata.
@@ -145,5 +189,50 @@ private struct WorktreeChip: View {
                     .strokeBorder(AppTheme.stroke, lineWidth: 1)
             )
             .accessibilityLabel("Linked worktree")
+    }
+}
+
+/// Animated progress indicator shown while a workspace has an active agent turn.
+private struct WorkspaceWorkingIndicator: View {
+    @ViewBuilder
+    var body: some View {
+        if #available(macOS 15.0, *) {
+            Image(systemName: "circle.dashed")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(AppTheme.highlight)
+                .frame(width: 20, height: 20)
+                .clipped()
+                .symbolEffect(
+                    .rotate.byLayer,
+                    options: .repeat(.continuous)
+                )
+                .accessibilityLabel("Workspace is working")
+        } else {
+            Image(systemName: "circle.dashed")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(AppTheme.highlight)
+                .frame(width: 20, height: 20)
+                .clipped()
+                .accessibilityLabel("Workspace is working")
+        }
+    }
+}
+
+/// Animated bell shown while a workspace owns queued completions.
+private struct WorkspacePendingIndicator: View {
+    @ViewBuilder
+    var body: some View {
+        if #available(macOS 15.0, *) {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.highlight)
+                .symbolEffect(.bounce.up.byLayer, options: .repeat(.continuous))
+                .accessibilityLabel("Workspace has pending completions")
+        } else {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.highlight)
+                .accessibilityLabel("Workspace has pending completions")
+        }
     }
 }

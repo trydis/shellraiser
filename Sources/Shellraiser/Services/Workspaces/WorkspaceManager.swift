@@ -71,13 +71,14 @@ final class WorkspaceManager: ObservableObject {
     @Published var pendingWorkspaceDeletion: WorkspaceDeletionRequest?
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
+    @Published var busySurfaceIds: Set<UUID> = []
 
     let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager
     let surfaceManager: WorkspaceSurfaceManager
     let runtimeBridge: any AgentRuntimeSupporting
     let completionNotifications: any AgentCompletionNotificationManaging
-    let completionEventMonitor: any AgentCompletionEventMonitoring
+    let activityEventMonitor: any AgentActivityEventMonitoring
     let gitStateResolver: GitStateResolver
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
@@ -92,14 +93,14 @@ final class WorkspaceManager: ObservableObject {
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: (any AgentRuntimeSupporting)? = nil,
         completionNotifications: any AgentCompletionNotificationManaging = AgentCompletionNotificationManager(),
-        completionEventMonitor: (any AgentCompletionEventMonitoring)? = nil,
+        activityEventMonitor: (any AgentActivityEventMonitoring)? = nil,
         registersLocalShortcutMonitor: Bool = true,
         gitStateResolver: @escaping GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
     ) {
         let resolvedRuntimeBridge = runtimeBridge ?? AgentRuntimeBridge.shared
-        let resolvedCompletionEventMonitor = completionEventMonitor
+        let resolvedActivityEventMonitor = activityEventMonitor
             ?? AgentCompletionEventMonitor(logURL: resolvedRuntimeBridge.eventLogURL)
 
         self.persistence = persistence
@@ -108,7 +109,7 @@ final class WorkspaceManager: ObservableObject {
         self.runtimeBridge = resolvedRuntimeBridge
         self.completionNotifications = completionNotifications
         resolvedRuntimeBridge.prepareRuntimeSupport()
-        self.completionEventMonitor = resolvedCompletionEventMonitor
+        self.activityEventMonitor = resolvedActivityEventMonitor
         self.gitStateResolver = gitStateResolver
 
         completionNotifications.onActivateSurface = { [weak self] surfaceId in
@@ -116,8 +117,8 @@ final class WorkspaceManager: ObservableObject {
                 self?.focusCompletionSurface(surfaceId)
             }
         }
-        resolvedCompletionEventMonitor.onEvent = { [weak self] event in
-            self?.handleCompletionEvent(event)
+        resolvedActivityEventMonitor.onEvent = { [weak self] event in
+            self?.handleAgentActivityEvent(event)
         }
 
         if registersLocalShortcutMonitor {

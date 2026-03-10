@@ -17,28 +17,37 @@ struct PendingCompletionTarget {
     let sequence: Int
 }
 
-/// Parsed completion event emitted by managed Claude/Codex wrappers.
-struct AgentCompletionEvent {
+/// Phase emitted by managed Claude/Codex wrappers for one agent turn.
+enum AgentActivityPhase: String {
+    case started
+    case completed
+}
+
+/// Parsed activity event emitted by managed Claude/Codex wrappers.
+struct AgentActivityEvent {
     let timestamp: Date
     let agentType: AgentType
     let surfaceId: UUID
+    let phase: AgentActivityPhase
     let payload: String
 
-    /// Decodes a tab-delimited completion event log line.
-    static func parse(_ line: String) -> AgentCompletionEvent? {
+    /// Decodes a tab-delimited activity event log line.
+    static func parse(_ line: String) -> AgentActivityEvent? {
         let components = line.split(separator: "\t", omittingEmptySubsequences: false)
-        guard components.count >= 4 else { return nil }
+        guard components.count >= 5 else { return nil }
         guard let timestamp = Self.timestampFormatter.date(from: String(components[0])) else { return nil }
         guard let agentType = AgentType(rawValue: String(components[1])) else { return nil }
         guard let surfaceId = UUID(uuidString: String(components[2])) else { return nil }
-
-        let payloadData = Data(base64Encoded: String(components[3])) ?? Data()
+        guard let phase = AgentActivityPhase(rawValue: String(components[3])) else { return nil }
+        let payloadColumn = String(components[4])
+        let payloadData = Data(base64Encoded: payloadColumn) ?? Data()
         let payload = String(decoding: payloadData, as: UTF8.self)
 
-        return AgentCompletionEvent(
+        return AgentActivityEvent(
             timestamp: timestamp,
             agentType: agentType,
             surfaceId: surfaceId,
+            phase: phase,
             payload: payload
         )
     }

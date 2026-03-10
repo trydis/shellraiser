@@ -4,7 +4,7 @@ import XCTest
 /// Covers managed-agent wrapper generation for runtime integration.
 @MainActor
 final class AgentRuntimeBridgeTests: XCTestCase {
-    /// Verifies the Claude wrapper only emits completion events for top-level turn completion.
+    /// Verifies the Claude wrapper emits top-level start/stop hooks without subagent hooks.
     func testPrepareRuntimeSupportWritesClaudeWrapperWithoutSubagentStopHook() throws {
         let bridge = AgentRuntimeBridge.shared
         let wrapperURL = bridge.binDirectory.appendingPathComponent("claude")
@@ -15,7 +15,23 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
 
+        XCTAssertTrue(wrapperContents.contains("\"UserPromptSubmit\""))
         XCTAssertTrue(wrapperContents.contains("\"Stop\""))
         XCTAssertFalse(wrapperContents.contains("\"SubagentStop\""))
+    }
+
+    /// Verifies the helper script only matches fully qualified Codex runtime phases.
+    func testPrepareRuntimeSupportWritesHelperWithoutBareCodexCase() throws {
+        let bridge = AgentRuntimeBridge.shared
+        let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
+
+        try? FileManager.default.removeItem(at: helperURL)
+
+        bridge.prepareRuntimeSupport()
+
+        let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
+
+        XCTAssertTrue(helperContents.contains("codex:completed)"))
+        XCTAssertFalse(helperContents.contains("\n            codex)\n"))
     }
 }

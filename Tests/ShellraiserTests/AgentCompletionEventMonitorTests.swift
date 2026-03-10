@@ -2,12 +2,12 @@ import Foundation
 import XCTest
 @testable import Shellraiser
 
-/// Covers file-tail behavior for managed-agent completion event monitoring.
+/// Covers file-tail behavior for managed-agent activity event monitoring.
 final class AgentCompletionEventMonitorTests: XCTestCase {
-    /// Verifies the monitor emits appended completion events for valid log lines.
+    /// Verifies the monitor emits appended activity events for valid log lines.
     func testMonitorEmitsEventForAppendedLine() throws {
         let logURL = try makeLogFile()
-        let expectation = expectation(description: "Monitor emits appended completion event")
+        let expectation = expectation(description: "Monitor emits appended activity event")
         let expectedSurfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001601")!
         let expectedTimestamp = ISO8601DateFormatter().date(from: "2026-03-08T20:30:00Z")!
         let monitor = AgentCompletionEventMonitor(logURL: logURL)
@@ -15,13 +15,14 @@ final class AgentCompletionEventMonitorTests: XCTestCase {
         monitor.onEvent = { event in
             XCTAssertEqual(event.agentType, .codex)
             XCTAssertEqual(event.surfaceId, expectedSurfaceId)
+            XCTAssertEqual(event.phase, .completed)
             XCTAssertEqual(event.payload, "hello")
             XCTAssertEqual(event.timestamp, expectedTimestamp)
             expectation.fulfill()
         }
 
         appendLine(
-            "2026-03-08T20:30:00Z\tcodex\t\(expectedSurfaceId.uuidString)\t\(Data("hello".utf8).base64EncodedString())",
+            "2026-03-08T20:30:00Z\tcodex\t\(expectedSurfaceId.uuidString)\tcompleted\t\(Data("hello".utf8).base64EncodedString())",
             to: logURL
         )
 
@@ -32,7 +33,7 @@ final class AgentCompletionEventMonitorTests: XCTestCase {
     /// Verifies historical file contents are ignored and malformed appended lines are skipped.
     func testMonitorIgnoresHistoricalAndMalformedLines() throws {
         let logURL = try makeLogFile(
-            initialContents: "2026-03-08T20:00:00Z\tcodex\t00000000-0000-0000-0000-000000001699\t\(Data("old".utf8).base64EncodedString())\n"
+            initialContents: "2026-03-08T20:00:00Z\tcodex\t00000000-0000-0000-0000-000000001699\tcompleted\t\(Data("old".utf8).base64EncodedString())\n"
         )
         let historicalExpectation = expectation(description: "Historical event ignored")
         historicalExpectation.isInverted = true
@@ -51,7 +52,7 @@ final class AgentCompletionEventMonitorTests: XCTestCase {
         wait(for: [historicalExpectation], timeout: 0.2)
         appendLine("not-a-valid-event", to: logURL)
         appendLine(
-            "2026-03-08T20:31:00Z\tclaudeCode\t\(expectedSurfaceId.uuidString)\t\(Data("new".utf8).base64EncodedString())",
+            "2026-03-08T20:31:00Z\tclaudeCode\t\(expectedSurfaceId.uuidString)\tstarted\t",
             to: logURL
         )
 

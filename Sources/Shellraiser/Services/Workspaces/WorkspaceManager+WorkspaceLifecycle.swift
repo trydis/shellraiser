@@ -60,6 +60,7 @@ extension WorkspaceManager {
             window: &window,
             persistence: persistence
         )
+        clearBusySurfaces(releasedSurfaceIds)
         releasedSurfaceIds.forEach {
             completionNotifications.removeNotifications(for: $0)
             GhosttyRuntime.shared.releaseSurface(surfaceId: $0)
