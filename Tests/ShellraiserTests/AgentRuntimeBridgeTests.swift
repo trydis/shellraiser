@@ -19,4 +19,19 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(wrapperContents.contains("\"Stop\""))
         XCTAssertFalse(wrapperContents.contains("\"SubagentStop\""))
     }
+
+    /// Verifies the helper script only matches fully qualified Codex runtime phases.
+    func testPrepareRuntimeSupportWritesHelperWithoutBareCodexCase() throws {
+        let bridge = AgentRuntimeBridge.shared
+        let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
+
+        try? FileManager.default.removeItem(at: helperURL)
+
+        bridge.prepareRuntimeSupport()
+
+        let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
+
+        XCTAssertTrue(helperContents.contains("codex:completed)"))
+        XCTAssertFalse(helperContents.contains("\n            codex)\n"))
+    }
 }

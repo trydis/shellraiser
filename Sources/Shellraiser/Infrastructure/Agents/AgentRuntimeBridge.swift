@@ -190,8 +190,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             codex:completed)
                 payload="${4:-}"
                 ;;
-            codex)
-                ;;
         esac
 
         timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
