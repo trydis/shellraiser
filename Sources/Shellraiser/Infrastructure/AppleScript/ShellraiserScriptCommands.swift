@@ -59,6 +59,16 @@ private extension NSScriptCommand {
             ?? (evaluatedArguments?["with configuration"] as? ScriptableSurfaceConfiguration)
             ?? (evaluatedArguments?["withConfiguration"] as? ScriptableSurfaceConfiguration)
     }
+
+    /// Resolves the optional workspace name from supported scripting parameter keys.
+    func resolvedWorkspaceName() -> String? {
+        let name = (evaluatedArguments?["workspaceName"] as? String)
+            ?? (evaluatedArguments?["named"] as? String)
+            ?? (evaluatedArguments?["name"] as? String)
+            ?? (directParameter as? String)
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedName.isEmpty ? nil : trimmedName
+    }
 }
 
 /// Shared helpers for Shellraiser AppleScript split-direction decoding.
@@ -106,8 +116,12 @@ private enum ScriptSplitDirectionResolver {
 final class NewWorkspaceScriptCommand: NSScriptCommand {
     /// Executes the `new workspace` command against the application scripting controller.
     override func performDefaultImplementation() -> Any? {
+        let workspaceName = resolvedWorkspaceName()
         let configuration = resolvedSurfaceConfiguration()
-        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(configuration: configuration) else {
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: workspaceName,
+            configuration: configuration
+        ) else {
             scriptErrorNumber = NSReceiverEvaluationScriptError
             scriptErrorString = "Shellraiser could not create the requested workspace."
             return nil

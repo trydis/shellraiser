@@ -79,10 +79,13 @@ extension WorkspaceManager {
         return true
     }
 
-    /// Creates a new workspace and applies the provided surface configuration.
-    func createScriptWindow(configuration: ScriptableSurfaceConfiguration?) -> UUID? {
+    /// Creates a new workspace with an optional name and applies the provided surface configuration.
+    func createScriptWindow(
+        name: String? = nil,
+        configuration: ScriptableSurfaceConfiguration?
+    ) -> UUID? {
         let workspace = createWorkspace(
-            name: "Workspace",
+            name: name ?? "Workspace",
             initialSurface: makeScriptSurface(configuration: configuration)
         )
         selectWorkspace(workspace.id)

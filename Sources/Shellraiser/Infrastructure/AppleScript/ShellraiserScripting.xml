@@ -16,6 +16,9 @@
 
         <command name="new workspace" code="ShRsNwWs" description="Creates a new workspace.">
             <cocoa class="NewWorkspaceScriptCommand"/>
+            <parameter name="named" code="ShNm" type="text" optional="yes" description="The visible name for the new workspace.">
+                <cocoa key="workspaceName"/>
+            </parameter>
             <parameter name="with configuration" code="ShCf" type="surface configuration" optional="yes" description="The configuration to apply to the new workspace.">
                 <cocoa key="configuration"/>
             </parameter>

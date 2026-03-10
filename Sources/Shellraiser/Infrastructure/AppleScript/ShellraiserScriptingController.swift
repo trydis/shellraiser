@@ -122,10 +122,16 @@ final class ShellraiserScriptingController {
         surfaceConfigurationsByID[configuration.id] = configuration
     }
 
-    /// Creates a new scriptable workspace using a scripting configuration.
-    func newWorkspace(configuration: ScriptableSurfaceConfiguration?) -> ScriptableWorkspace? {
+    /// Creates a new scriptable workspace using an optional name and scripting configuration.
+    func newWorkspace(
+        name: String? = nil,
+        configuration: ScriptableSurfaceConfiguration?
+    ) -> ScriptableWorkspace? {
         guard let manager = workspaceManager,
-              let workspaceId = manager.createScriptWindow(configuration: configuration),
+              let workspaceId = manager.createScriptWindow(
+                name: name,
+                configuration: configuration
+              ),
               let snapshot = workspaceSnapshots().first(where: { $0.workspaceId == workspaceId }) else {
             return nil
         }
