@@ -155,7 +155,7 @@ final class GhosttyRuntime {
             onPaneNavigationRequest: onPaneNavigationRequest
         )
         hostViewsBySurfaceId[surfaceModel.id] = created
-        mountedHostCountsBySurfaceId[surfaceModel.id, default: 0] = 0
+        mountedHostCountsBySurfaceId[surfaceModel.id] = 0
         return created
     }
 

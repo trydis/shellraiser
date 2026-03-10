@@ -30,7 +30,7 @@ protocol GhosttyTerminalRuntimeControlling: AnyObject {
     func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: any GhosttyFocusableHost)
 }
 
-/// Wrapper AppKit view used to give each SwiftUI representable its own NSView instance.
+/// Wrapper AppKit view that gives each SwiftUI mount its own root `NSView`.
 @MainActor
 final class GhosttyTerminalContainerView: NSView {
     private(set) var mountedSurfaceId: UUID?
@@ -45,7 +45,7 @@ final class GhosttyTerminalContainerView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Mounts a shared host view into this container and keeps it sized to fill the pane.
+    /// Mounts the shared host view into this container and sizes it to fill the pane.
     func mountHostView(_ hostView: NSView, surfaceId: UUID) {
         subviews
             .filter { $0 !== hostView }
@@ -61,7 +61,7 @@ final class GhosttyTerminalContainerView: NSView {
         mountedSurfaceId = surfaceId
     }
 
-    /// Clears tracked mount metadata when SwiftUI tears down this representable instance.
+    /// Clears the mounted surface tracking during teardown.
     func clearMountedSurface() {
         mountedSurfaceId = nil
     }
@@ -159,7 +159,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         #endif
     }
 
-    /// Synchronizes a representable-owned container with the shared terminal host view.
+    /// Synchronizes a per-mount wrapper with the shared host view cached by the runtime.
     static func syncContainerView(
         _ container: GhosttyTerminalContainerView,
         host: NSView & GhosttyTerminalHostView,
@@ -199,7 +199,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         )
     }
 
-    /// Detaches the mounted surface from a wrapper container during teardown.
+    /// Detaches the mounted surface tracked by a wrapper container during teardown.
     static func dismantleContainerView(
         _ container: GhosttyTerminalContainerView,
         runtime: any GhosttyTerminalRuntimeControlling

@@ -39,7 +39,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertTrue(runtime.restoredHosts.first === host)
     }
 
-    /// Verifies remounting the same shared host into a new wrapper view reparents the host cleanly.
+    /// Verifies reparenting a shared host into a new wrapper keeps the host off the mount root.
     func testSyncContainerViewReparentsSharedHostWithoutDetachingCurrentMount() {
         let runtime = MockGhosttyTerminalRuntime()
         let firstContainer = GhosttyTerminalContainerView(frame: .zero)
@@ -92,20 +92,22 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertEqual(runtime.detachHostSurfaceIds, [])
     }
 
-    /// Verifies working-directory change callbacks are forwarded through host synchronization.
-    func testSyncHostViewForwardsWorkingDirectoryChangeHandler() {
+    /// Verifies a wrapper swaps in the current cached host when the surface stays the same.
+    func testSyncContainerViewReplacesMountedHostForSameSurfaceWithoutRemountingSurface() {
         let runtime = MockGhosttyTerminalRuntime()
-        let host = MockGhosttyTerminalHostView()
+        let container = GhosttyTerminalContainerView(frame: .zero)
+        let firstHost = MockGhosttyTerminalHostView()
+        let secondHost = MockGhosttyTerminalHostView()
         let surface = SurfaceModel.makeDefault()
         let config = TerminalPanelConfig(
             workingDirectory: "/tmp",
             shell: "/bin/zsh",
             environment: [:]
         )
-        var reportedWorkingDirectories: [String] = []
 
-        GhosttyTerminalView.syncHostView(
-            host,
+        GhosttyTerminalView.syncContainerView(
+            container,
+            host: firstHost,
             runtime: runtime,
             surface: surface,
             config: config,
@@ -114,17 +116,35 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onIdleNotification: {},
             onUserInput: {},
             onTitleChange: { _ in },
-            onWorkingDirectoryChange: { reportedWorkingDirectories.append($0) },
+            onWorkingDirectoryChange: { _ in },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in }
+        )
+        GhosttyTerminalView.syncContainerView(
+            container,
+            host: secondHost,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: true,
+            onActivate: {},
+            onIdleNotification: {},
+            onUserInput: {},
+            onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
             onChildExited: {},
             onPaneNavigationRequest: { _ in }
         )
 
-        host.workingDirectoryChangeHandler?("new/path")
-
-        XCTAssertEqual(reportedWorkingDirectories, ["new/path"])
+        XCTAssertTrue(firstHost.superview == nil)
+        XCTAssertTrue(secondHost.superview === container)
+        XCTAssertEqual(container.subviews.count, 1)
+        XCTAssertTrue(container.subviews.first === secondHost)
+        XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id])
+        XCTAssertEqual(runtime.detachHostSurfaceIds, [])
     }
 
-    /// Verifies wrapper teardown decrements mount tracking for the surface once.
+    /// Verifies wrapper teardown decrements mount tracking for the mounted surface once.
     func testDismantleContainerViewDetachesMountedSurface() {
         let runtime = MockGhosttyTerminalRuntime()
         let container = GhosttyTerminalContainerView(frame: .zero)
