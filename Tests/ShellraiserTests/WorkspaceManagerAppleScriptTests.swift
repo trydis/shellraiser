@@ -4,6 +4,64 @@ import XCTest
 /// Covers AppleScript-oriented workspace and split behavior.
 @MainActor
 final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
+    /// Verifies creating a workspace with a scripted name applies that name to workspace state.
+    func testNewWorkspaceAppliesProvidedName() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Review Session",
+            configuration: nil
+        ) else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        XCTAssertEqual(workspace.name, "Review Session")
+        XCTAssertEqual(manager.workspaces.first?.name, "Review Session")
+    }
+
+    /// Verifies scripted workspace creation preserves the default name when no name is provided.
+    func testNewWorkspaceUsesDefaultNameWhenNotProvided() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: nil,
+            configuration: nil
+        ) else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        XCTAssertEqual(workspace.name, "Workspace")
+        XCTAssertEqual(manager.workspaces.first?.name, "Workspace")
+    }
+
+    /// Verifies scripted workspace creation trims names and falls back when only whitespace is provided.
+    func testCreateScriptWindowNormalizesWhitespaceOnlyNames() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+
+        let trimmedWorkspaceId = manager.createScriptWindow(
+            name: "  Review Session  ",
+            configuration: nil
+        )
+        let whitespaceWorkspaceId = manager.createScriptWindow(
+            name: "   \n\t   ",
+            configuration: nil
+        )
+
+        XCTAssertEqual(
+            manager.workspaces.first(where: { $0.id == trimmedWorkspaceId })?.name,
+            "Review Session"
+        )
+        XCTAssertEqual(
+            manager.workspaces.first(where: { $0.id == whitespaceWorkspaceId })?.name,
+            "Workspace"
+        )
+    }
+
     /// Verifies creating a workspace with a scripted surface configuration applies its working directory.
     func testNewWorkspaceAppliesSurfaceConfigurationWorkingDirectory() {
         let manager = makeWorkspaceManager()
@@ -13,7 +71,9 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         let configuration = ScriptableSurfaceConfiguration()
         configuration.initialWorkingDirectory = "/tmp/project"
 
-        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(configuration: configuration) else {
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            configuration: configuration
+        ) else {
             return XCTFail("Expected scripted workspace creation to succeed.")
         }
 
