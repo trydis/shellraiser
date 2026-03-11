@@ -16,9 +16,10 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
 
         XCTAssertTrue(wrapperContents.contains("\"UserPromptSubmit\""))
+        XCTAssertTrue(wrapperContents.contains("\"PreToolUse\""))
+        XCTAssertTrue(wrapperContents.contains("\"matcher\": \"*\""))
         XCTAssertTrue(wrapperContents.contains("\"Stop\""))
         XCTAssertTrue(wrapperContents.contains("\"PermissionRequest\""))
-        XCTAssertTrue(wrapperContents.contains("\"matcher\": \"*\""))
         XCTAssertTrue(wrapperContents.contains("\"Notification\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"permission_prompt\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"elicitation_dialog\""))

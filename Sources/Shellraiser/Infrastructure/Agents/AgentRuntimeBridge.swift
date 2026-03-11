@@ -243,6 +243,17 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 ]
               }
             ],
+            "PreToolUse": [
+              {
+                "matcher": "*",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" started"
+                  }
+                ]
+              }
+            ],
             "Stop": [
               {
                 "hooks": [
