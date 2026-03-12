@@ -8,7 +8,8 @@ extension WorkspaceManager {
         workspaces.map { workspace in
             ScriptableWorkspaceSnapshot(
                 workspaceId: workspace.id,
-                name: workspace.name
+                name: workspace.name,
+                rootWorkingDirectory: workspace.rootWorkingDirectory
             )
         }
     }
@@ -93,13 +94,23 @@ extension WorkspaceManager {
         configuration: ScriptableSurfaceConfiguration?
     ) -> UUID? {
         let normalizedName = resolvedScriptWorkspaceName(name)
+        let rootWorkingDirectory = resolvedScriptWorkspaceRootWorkingDirectory(configuration)
         let workspace = createWorkspace(
             name: normalizedName,
-            initialSurface: makeScriptSurface(configuration: configuration)
+            initialSurface: makeScriptSurface(configuration: configuration),
+            rootWorkingDirectory: rootWorkingDirectory
         )
         selectWorkspace(workspace.id)
 
         return workspace.id
+    }
+
+    /// Deletes a workspace directly for AppleScript-driven automation without interactive confirmation.
+    @discardableResult
+    func deleteScriptWorkspace(id: UUID) -> Bool {
+        guard workspace(id: id) != nil else { return false }
+        deleteWorkspace(id: id)
+        return true
     }
 
     /// Splits the pane owning a scripted terminal and returns the newly created terminal snapshot.
@@ -245,6 +256,13 @@ private extension WorkspaceManager {
     func resolvedScriptWorkspaceName(_ name: String?) -> String {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmedName.isEmpty ? "Workspace" : trimmedName
+    }
+
+    /// Resolves the stable workspace root path for scripted creation flows.
+    func resolvedScriptWorkspaceRootWorkingDirectory(_ configuration: ScriptableSurfaceConfiguration?) -> String {
+        let rootWorkingDirectory = configuration?.initialWorkingDirectory
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return rootWorkingDirectory.isEmpty ? NSHomeDirectory() : rootWorkingDirectory
     }
 
     /// Maps script split directions onto pane orientation and insertion position.

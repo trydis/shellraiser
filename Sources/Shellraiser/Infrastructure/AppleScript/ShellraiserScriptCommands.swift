@@ -4,6 +4,10 @@ import Foundation
 @MainActor
 private protocol TerminalTargetingScriptCommand: NSScriptCommand {}
 
+/// Shared helpers for Shellraiser workspace-targeted commands.
+@MainActor
+private protocol WorkspaceTargetingScriptCommand: NSScriptCommand {}
+
 extension TerminalTargetingScriptCommand {
     /// Resolves the destination terminal from the direct parameter, receiver, or `to` argument.
     func resolvedTerminal() -> ScriptableTerminal? {
@@ -44,6 +48,52 @@ extension TerminalTargetingScriptCommand {
 
     /// Records a standard AppleScript argument error and returns `nil`.
     func failArgument(_ message: String) -> Any? {
+        scriptErrorNumber = NSArgumentsWrongScriptError
+        scriptErrorString = message
+        return nil
+    }
+}
+
+extension WorkspaceTargetingScriptCommand {
+    /// Resolves the destination workspace from the direct parameter, receiver, or `workspace` argument.
+    func resolvedWorkspace() -> ScriptableWorkspace? {
+        if let workspace = directParameter as? ScriptableWorkspace {
+            return workspace
+        }
+
+        if let workspaces = directParameter as? [ScriptableWorkspace], workspaces.count == 1 {
+            return workspaces[0]
+        }
+
+        if let workspace = evaluatedReceivers as? ScriptableWorkspace {
+            return workspace
+        }
+
+        if let workspaces = evaluatedReceivers as? [ScriptableWorkspace], workspaces.count == 1 {
+            return workspaces[0]
+        }
+
+        if let workspace = evaluatedArguments?["workspace"] as? ScriptableWorkspace {
+            return workspace
+        }
+
+        if let workspaces = evaluatedArguments?["workspace"] as? [ScriptableWorkspace], workspaces.count == 1 {
+            return workspaces[0]
+        }
+
+        if let workspace = evaluatedArguments?["to"] as? ScriptableWorkspace {
+            return workspace
+        }
+
+        if let workspaces = evaluatedArguments?["to"] as? [ScriptableWorkspace], workspaces.count == 1 {
+            return workspaces[0]
+        }
+
+        return nil
+    }
+
+    /// Records a standard AppleScript argument error and returns `nil`.
+    func failWorkspaceArgument(_ message: String) -> Any? {
         scriptErrorNumber = NSArgumentsWrongScriptError
         scriptErrorString = message
         return nil
@@ -148,6 +198,26 @@ final class CountWorkspacesScriptCommand: NSScriptCommand {
     /// Executes the `count workspaces` command against the application scripting controller.
     override func performDefaultImplementation() -> Any? {
         NSNumber(value: ShellraiserScriptingController.shared.workspaces().count)
+    }
+}
+
+/// AppleScript command that deletes a specific workspace directly.
+@MainActor
+@objc(DeleteWorkspaceScriptCommand)
+final class DeleteWorkspaceScriptCommand: NSScriptCommand, WorkspaceTargetingScriptCommand {
+    /// Executes the `delete workspace` command against the resolved workspace.
+    override func performDefaultImplementation() -> Any? {
+        guard let workspace = resolvedWorkspace() else {
+            return failWorkspaceArgument("The delete workspace command requires a workspace.")
+        }
+
+        guard ShellraiserScriptingController.shared.delete(workspace: workspace) else {
+            scriptErrorNumber = NSReceiverEvaluationScriptError
+            scriptErrorString = "Shellraiser could not delete the requested workspace."
+            return nil
+        }
+
+        return nil
     }
 }
 

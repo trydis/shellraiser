@@ -49,6 +49,7 @@ final class ScriptableSurfaceConfiguration: NSObject {
 struct ScriptableWorkspaceSnapshot: Identifiable, Equatable {
     let workspaceId: UUID
     let name: String
+    let rootWorkingDirectory: String
 
     /// Stable identifier for the workspace wrapper.
     var id: String {
@@ -88,6 +89,11 @@ final class ScriptableWorkspace: NSObject {
     /// Stable workspace identifier.
     @objc dynamic var id: String {
         snapshot.id
+    }
+
+    /// Stable workspace root path used for automation lookups.
+    @objc dynamic var rootWorkingDirectory: String {
+        snapshot.rootWorkingDirectory
     }
 
     /// Selected tab for the workspace.

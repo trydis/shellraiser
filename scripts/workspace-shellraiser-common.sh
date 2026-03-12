@@ -18,6 +18,29 @@ resolve_repo_root() {
     fi
 }
 
+# Returns the canonical primary repository root even when invoked from a linked worktree.
+resolve_main_repo_root() {
+    local common_git_dir repo_root
+
+    if common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+        :
+    else
+        repo_root="$(resolve_repo_root)"
+        if ! common_git_dir="$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null)"; then
+            fail_with_message "Failed to resolve the repository common Git directory."
+        fi
+        if [[ "$common_git_dir" != /* ]]; then
+            common_git_dir="$repo_root/$common_git_dir"
+        fi
+    fi
+
+    if ! cd "$common_git_dir/.." >/dev/null 2>&1; then
+        fail_with_message "Failed to resolve the canonical repository root."
+    fi
+
+    pwd -P
+}
+
 # Returns the requested workspace name from arguments or an interactive prompt.
 resolve_workspace_name() {
     local workspace_name
@@ -71,6 +94,14 @@ local_branch_exists() {
     local branch_name="$2"
 
     git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch_name"
+}
+
+# Returns whether the requested worktree path is registered with Git.
+registered_worktree_exists() {
+    local repo_root="$1"
+    local worktree_path="$2"
+
+    [[ -n "$(resolve_registered_branch_for_worktree "$repo_root" "$worktree_path")" ]]
 }
 
 # Returns the default sibling worktree path for the requested branch slug.
@@ -196,6 +227,139 @@ prepare_workspace_worktree() {
     fi
 
     printf '%s\t%s\n' "$worktree_path" "$branch_name"
+}
+
+# Prompts the user for an interactive yes/no confirmation.
+confirm_with_user() {
+    local prompt_message="$1"
+    local response=""
+
+    if ! read -r -p "$prompt_message [y/N] " response; then
+        return 1
+    fi
+
+    case "$response" in
+        [Yy]|[Yy][Ee][Ss])
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Returns whether a linked worktree is clean enough for non-forced removal.
+worktree_is_clean() {
+    local worktree_path="$1"
+    local status_output
+
+    status_output="$(git -C "$worktree_path" status --porcelain --untracked-files=all --ignore-submodules=none)"
+    [[ -z "$status_output" ]]
+}
+
+# Returns whether safe branch deletion would require force.
+branch_delete_requires_force() {
+    local repo_root="$1"
+    local branch_name="$2"
+    local upstream_ref target_ref
+
+    upstream_ref="$(git -C "$repo_root" for-each-ref --format='%(upstream:short)' "refs/heads/$branch_name")"
+    target_ref="${upstream_ref:-HEAD}"
+
+    if git -C "$repo_root" merge-base --is-ancestor "$branch_name" "$target_ref" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    return 0
+}
+
+# Removes a linked worktree, optionally prompting before forcing removal of dirty contents.
+remove_workspace_worktree() {
+    local repo_root="$1"
+    local main_repo_root="$2"
+    local worktree_path="$3"
+    local force_mode="${4:-prompt}"
+
+    if [[ "$worktree_path" == "$main_repo_root" ]]; then
+        fail_with_message "Refusing to remove the primary repository worktree '$worktree_path'."
+    fi
+
+    if ! registered_worktree_exists "$repo_root" "$worktree_path"; then
+        return 1
+    fi
+
+    if worktree_is_clean "$worktree_path"; then
+        git -C "$repo_root" worktree remove "$worktree_path" \
+            || fail_with_message "Failed to remove clean worktree '$worktree_path'."
+        return 0
+    fi
+
+    if [[ "$force_mode" == "prompt" ]] && ! confirm_with_user "Worktree '$worktree_path' has uncommitted or untracked files. Force delete it?"; then
+        return 1
+    fi
+
+    git -C "$repo_root" worktree remove -f "$worktree_path" \
+        || fail_with_message "Failed to force-remove worktree '$worktree_path'."
+}
+
+# Deletes a branch, optionally prompting before forcing removal when Git refuses a safe delete.
+delete_workspace_branch() {
+    local repo_root="$1"
+    local branch_name="$2"
+    local force_mode="${3:-prompt}"
+
+    if ! local_branch_exists "$repo_root" "$branch_name"; then
+        return 1
+    fi
+
+    if git -C "$repo_root" branch -d "$branch_name"; then
+        return 0
+    fi
+
+    if [[ "$force_mode" == "prompt" ]] && ! confirm_with_user "Branch '$branch_name' was not deleted safely. Force delete it?"; then
+        return 1
+    fi
+
+    git -C "$repo_root" branch -D "$branch_name" \
+        || fail_with_message "Failed to force-delete branch '$branch_name'."
+}
+
+# Deletes the matching Shellraiser workspace for a stable workspace root path.
+delete_shellraiser_workspace_for_root() {
+    local workspace_root="$1"
+    local result
+
+    if ! pgrep -x "Shellraiser" >/dev/null 2>&1; then
+        printf '%s\n' "not-running"
+        return 0
+    fi
+
+    if ! result="$(osascript - "$workspace_root" <<'APPLESCRIPT'
+on run argv
+    set workspaceRoot to item 1 of argv
+
+    tell application "Shellraiser"
+        set matchingWorkspaces to every workspace whose root working directory is workspaceRoot
+        set matchCount to count of matchingWorkspaces
+
+        if matchCount = 0 then
+            return "not-found"
+        end if
+
+        if matchCount > 1 then
+            error "Multiple Shellraiser workspaces match " & workspaceRoot
+        end if
+
+        delete workspace (item 1 of matchingWorkspaces)
+        return "deleted"
+    end tell
+end run
+APPLESCRIPT
+    )"; then
+        fail_with_message "Shellraiser workspace deletion failed for '$workspace_root'."
+    fi
+
+    printf '%s\n' "$result"
 }
 
 # Creates a new Shellraiser workspace rooted at the worktree and starts the two commands.

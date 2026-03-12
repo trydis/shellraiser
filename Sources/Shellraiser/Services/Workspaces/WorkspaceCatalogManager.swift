@@ -52,11 +52,16 @@ final class WorkspaceCatalogManager {
     func createWorkspace(
         name: String = "New Workspace",
         initialSurface: SurfaceModel = SurfaceModel.makeDefault(),
+        rootWorkingDirectory: String? = nil,
         workspaces: inout [WorkspaceModel],
         window: inout WindowModel,
         persistence: any WorkspacePersisting
     ) -> WorkspaceModel {
-        let workspace = WorkspaceModel.makeDefault(name: name, initialSurface: initialSurface)
+        let workspace = WorkspaceModel.makeDefault(
+            name: name,
+            initialSurface: initialSurface,
+            rootWorkingDirectory: rootWorkingDirectory
+        )
         workspaces.append(workspace)
         window.selectedWorkspaceId = workspace.id
         persistence.save(workspaces)

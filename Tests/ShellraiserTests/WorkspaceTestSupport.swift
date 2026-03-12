@@ -81,15 +81,31 @@ class WorkspaceTestCase: XCTestCase {
         name: String = "Workspace",
         rootPane: PaneNodeModel,
         focusedSurfaceId: UUID? = nil,
-        zoomedPaneId: UUID? = nil
+        zoomedPaneId: UUID? = nil,
+        rootWorkingDirectory: String? = nil
     ) -> WorkspaceModel {
         WorkspaceModel(
             id: id,
             name: name,
             rootPane: rootPane,
             focusedSurfaceId: focusedSurfaceId,
-            zoomedPaneId: zoomedPaneId
+            zoomedPaneId: zoomedPaneId,
+            rootWorkingDirectory: rootWorkingDirectory ?? workspaceRootWorkingDirectory(from: rootPane)
         )
+    }
+
+    /// Returns the first available working directory in a pane tree for stable workspace-root defaults.
+    private func workspaceRootWorkingDirectory(from rootPane: PaneNodeModel) -> String {
+        switch rootPane {
+        case .leaf(let leaf):
+            return leaf.surfaces.first?.terminalConfig.workingDirectory ?? NSHomeDirectory()
+        case .split(let split):
+            let firstPath = workspaceRootWorkingDirectory(from: split.first)
+            if firstPath != NSHomeDirectory() {
+                return firstPath
+            }
+            return workspaceRootWorkingDirectory(from: split.second)
+        }
     }
 
     /// Returns the first surface stored in a leaf pane.

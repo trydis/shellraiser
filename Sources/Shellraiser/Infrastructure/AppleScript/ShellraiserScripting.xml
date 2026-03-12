@@ -35,6 +35,11 @@
             <result type="integer" description="The workspace count."/>
         </command>
 
+        <command name="delete workspace" code="ShRsDlWs" description="Deletes a workspace without interactive confirmation.">
+            <cocoa class="DeleteWorkspaceScriptCommand"/>
+            <direct-parameter type="workspace" description="Workspace to delete."/>
+        </command>
+
         <command name="input" code="ShRsInTx" description="Inputs literal text into a terminal surface.">
             <cocoa class="InputTextScriptCommand"/>
             <parameter name="text" code="ctxt" type="text" description="Text to input."/>
@@ -77,6 +82,9 @@
             </element>
             <property name="name" code="pnam" type="text" access="r" description="Visible workspace name."/>
             <property name="id" code="ID  " type="text" access="r" description="Stable workspace identifier."/>
+            <property name="root working directory" code="ShRw" type="text" access="r" description="Stable root path used for workspace automation.">
+                <cocoa key="rootWorkingDirectory"/>
+            </property>
             <property name="selected tab" code="ShSt" type="tab" access="r" description="The currently selected tab.">
                 <cocoa key="selectedTab"/>
             </property>
