@@ -27,43 +27,51 @@ final class WorkspaceManagerLifecycleTests: WorkspaceTestCase {
         XCTAssertEqual(persistence.load()?.first?.name, "Renamed")
     }
 
-    /// Verifies delete requests require confirmation when the workspace still owns active surfaces.
+    /// Verifies active workspace deletion asks for confirmation and leaves state untouched when cancelled.
     func testDeleteRequestRequiresConfirmationForActiveWorkspace() {
-        let manager = makeWorkspaceManager()
+        var capturedRequest: WorkspaceDeletionRequest?
+        let manager = makeWorkspaceManager(confirmWorkspaceDeletion: { request in
+            capturedRequest = request
+            return false
+        })
         let workspace = WorkspaceModel.makeDefault(name: "Delete Me")
         manager.workspaces = [workspace]
         manager.window.selectedWorkspaceId = workspace.id
 
         manager.requestDeleteSelectedWorkspace()
 
-        XCTAssertEqual(manager.pendingWorkspaceDeletion?.workspaceId, workspace.id)
-        XCTAssertEqual(manager.pendingWorkspaceDeletion?.workspaceName, "Delete Me")
-        XCTAssertEqual(manager.pendingWorkspaceDeletion?.activeProcessCount, 1)
-
-        manager.cancelPendingWorkspaceDeletion()
-        XCTAssertNil(manager.pendingWorkspaceDeletion)
+        XCTAssertEqual(capturedRequest?.workspaceId, workspace.id)
+        XCTAssertEqual(capturedRequest?.workspaceName, "Delete Me")
+        XCTAssertEqual(capturedRequest?.activeProcessCount, 1)
         XCTAssertEqual(manager.workspaces.map(\.id), [workspace.id])
     }
 
-    /// Verifies confirming a pending delete removes the workspace and repairs selection.
-    func testConfirmPendingWorkspaceDeletionDeletesWorkspace() {
-        let manager = makeWorkspaceManager()
+    /// Verifies confirming workspace deletion removes the workspace and repairs selection.
+    func testRequestDeleteWorkspaceDeletesWorkspaceWhenConfirmed() {
+        var confirmationCount = 0
+        let manager = makeWorkspaceManager(confirmWorkspaceDeletion: { _ in
+            confirmationCount += 1
+            return true
+        })
         let firstWorkspace = WorkspaceModel.makeDefault(name: "First")
         let secondWorkspace = WorkspaceModel.makeDefault(name: "Second")
         manager.workspaces = [firstWorkspace, secondWorkspace]
         manager.window.selectedWorkspaceId = secondWorkspace.id
 
         manager.requestDeleteWorkspace(id: secondWorkspace.id)
-        manager.confirmPendingWorkspaceDeletion()
 
-        XCTAssertNil(manager.pendingWorkspaceDeletion)
+        XCTAssertEqual(confirmationCount, 1)
         XCTAssertEqual(manager.workspaces.map(\.id), [firstWorkspace.id])
         XCTAssertEqual(manager.window.selectedWorkspaceId, firstWorkspace.id)
     }
 
     /// Verifies empty workspaces bypass confirmation and delete immediately.
     func testDeleteRequestImmediatelyDeletesWorkspaceWithoutActiveSurfaces() {
-        let manager = makeWorkspaceManager()
+        var confirmationCount = 0
+        let manager = makeWorkspaceManager(confirmWorkspaceDeletion: { _ in
+            confirmationCount += 1
+            return true
+        })
         let emptyWorkspace = makeWorkspace(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000001301")!,
             name: "Empty",
@@ -76,7 +84,7 @@ final class WorkspaceManagerLifecycleTests: WorkspaceTestCase {
 
         manager.requestDeleteWorkspace(id: emptyWorkspace.id)
 
-        XCTAssertNil(manager.pendingWorkspaceDeletion)
+        XCTAssertEqual(confirmationCount, 0)
         XCTAssertEqual(manager.workspaces.map(\.id), [fallbackWorkspace.id])
         XCTAssertEqual(manager.window.selectedWorkspaceId, fallbackWorkspace.id)
     }
