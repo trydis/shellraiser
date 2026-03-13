@@ -53,7 +53,11 @@ extension WorkspaceManager {
         focusScriptSurface(target)
         let didSend = GhosttyRuntime.shared.sendText(surfaceId: target.surfaceId, text: text)
         if didSend {
-            noteSurfaceActivity(workspaceId: target.workspaceId, surfaceId: target.surfaceId)
+            handleSurfaceInput(
+                workspaceId: target.workspaceId,
+                surfaceId: target.surfaceId,
+                input: SurfaceInputEvent.classifyScriptedText(text)
+            )
         }
         return didSend
     }
@@ -66,7 +70,11 @@ extension WorkspaceManager {
         focusScriptSurface(target)
         let didSend = GhosttyRuntime.shared.sendNamedKey(surfaceId: target.surfaceId, keyName: keyName)
         if didSend {
-            noteSurfaceActivity(workspaceId: target.workspaceId, surfaceId: target.surfaceId)
+            handleSurfaceInput(
+                workspaceId: target.workspaceId,
+                surfaceId: target.surfaceId,
+                input: SurfaceInputEvent.classifyScriptedKeyName(keyName)
+            )
         }
         return didSend
     }

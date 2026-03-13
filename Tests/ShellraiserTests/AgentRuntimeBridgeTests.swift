@@ -73,6 +73,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(codexWrapperContents.contains("monitor_codex_session"))
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" session"))
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" exited"))
+        XCTAssertFalse(codexWrapperContents.contains("codex \"$surface\" started"))
         XCTAssertTrue(codexWrapperContents.contains("extract_codex_session_timestamp"))
         XCTAssertTrue(codexWrapperContents.contains("extract_codex_surface_id"))
         XCTAssertTrue(codexWrapperContents.contains("surface_matches_current_codex_session"))
