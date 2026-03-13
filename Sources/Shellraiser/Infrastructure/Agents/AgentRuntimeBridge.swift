@@ -10,20 +10,26 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     let zshShimDirectory: URL
     let eventLogURL: URL
 
-    private let fileManager = FileManager.default
+    private let fileManager: FileManager
     private var cachedExecutablePaths: [String: String?] = [:]
 
     /// Creates the bridge rooted in the process temp directory to avoid path escaping issues.
-    private init() {
-        let runtimeDirectory = fileManager.temporaryDirectory.appendingPathComponent(
-            "ShellraiserRuntime",
-            isDirectory: true
+    private convenience init() {
+        self.init(
+            rootURL: FileManager.default.temporaryDirectory.appendingPathComponent(
+                "ShellraiserRuntime",
+                isDirectory: true
+            )
         )
-        self.runtimeDirectory = runtimeDirectory
-        self.binDirectory = runtimeDirectory.appendingPathComponent("bin", isDirectory: true)
-        self.zshShimDirectory = runtimeDirectory.appendingPathComponent("zsh", isDirectory: true)
-        self.eventLogURL = runtimeDirectory.appendingPathComponent("agent-completions.log")
+    }
 
+    /// Creates a bridge rooted in the supplied directory for isolated runtime support.
+    init(rootURL: URL, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        self.runtimeDirectory = rootURL
+        self.binDirectory = rootURL.appendingPathComponent("bin", isDirectory: true)
+        self.zshShimDirectory = rootURL.appendingPathComponent("zsh", isDirectory: true)
+        self.eventLogURL = rootURL.appendingPathComponent("agent-completions.log")
         prepareRuntimeSupport()
     }
 

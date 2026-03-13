@@ -4,12 +4,23 @@ import XCTest
 /// Covers managed-agent wrapper generation for runtime integration.
 @MainActor
 final class AgentRuntimeBridgeTests: XCTestCase {
+    /// Creates a bridge rooted in a unique temporary directory for test isolation.
+    private func makeBridge(testName: String = #function) throws -> AgentRuntimeBridge {
+        let sanitizedTestName = testName
+            .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "-", options: .regularExpression)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShellraiserTests-\(sanitizedTestName)-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        return AgentRuntimeBridge(rootURL: directory)
+    }
+
     /// Verifies the Claude wrapper emits start, stop, permission-request, and selected notification hooks.
     func testPrepareRuntimeSupportWritesClaudeWrapperWithMappedNotificationHooks() throws {
-        let bridge = AgentRuntimeBridge.shared
+        let bridge = try makeBridge()
         let wrapperURL = bridge.binDirectory.appendingPathComponent("claude")
-
-        try? FileManager.default.removeItem(at: wrapperURL)
 
         bridge.prepareRuntimeSupport()
 
@@ -32,10 +43,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
     /// Verifies the helper script only matches fully qualified Codex runtime phases.
     func testPrepareRuntimeSupportWritesHelperWithoutBareCodexCase() throws {
-        let bridge = AgentRuntimeBridge.shared
+        let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
-
-        try? FileManager.default.removeItem(at: helperURL)
 
         bridge.prepareRuntimeSupport()
 
@@ -48,12 +57,9 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
     /// Verifies runtime wrappers emit session identity metadata for later resume.
     func testPrepareRuntimeSupportWritesWrappersWithSessionIdentityCapture() throws {
-        let bridge = AgentRuntimeBridge.shared
+        let bridge = try makeBridge()
         let claudeWrapperURL = bridge.binDirectory.appendingPathComponent("claude")
         let codexWrapperURL = bridge.binDirectory.appendingPathComponent("codex")
-
-        try? FileManager.default.removeItem(at: claudeWrapperURL)
-        try? FileManager.default.removeItem(at: codexWrapperURL)
 
         bridge.prepareRuntimeSupport()
 
@@ -80,10 +86,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
     /// Verifies the helper can extract Claude hook session identifiers from stdin payloads.
     func testPrepareRuntimeSupportWritesHelperWithClaudeHookSessionParsing() throws {
-        let bridge = AgentRuntimeBridge.shared
+        let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
-
-        try? FileManager.default.removeItem(at: helperURL)
 
         bridge.prepareRuntimeSupport()
 
