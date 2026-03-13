@@ -47,18 +47,25 @@ enter_prepared_worktree() {
 
 # Creates or reuses a Git worktree and enters it when running interactively.
 main() {
-    local repo_root worktree_name worktree_root branch_name
+    local repo_root worktree_name worktree_root branch_name worktree_status
 
     repo_root="$(resolve_repo_root)"
     worktree_name="$(resolve_worktree_name "$@")"
-    IFS=$'\t' read -r worktree_root branch_name < <(prepare_workspace_worktree "$repo_root" "$worktree_name")
-    [[ -n "$worktree_root" && -n "$branch_name" ]] || fail_with_message "Failed to resolve the worktree path."
+    IFS=$'\t' read -r worktree_root branch_name worktree_status < <(
+        prepare_workspace_worktree_with_status "$repo_root" "$worktree_name"
+    )
+    [[ -n "$worktree_root" && -n "$branch_name" && -n "$worktree_status" ]] \
+        || fail_with_message "Failed to resolve the worktree path."
+
+    if [[ "$worktree_status" == "created" ]]; then
+        bootstrap_ghostty_for_worktree "$worktree_root" || return 1
+    fi
 
     printf 'Worktree name: %s\n' "$worktree_name"
     printf 'Worktree path: %s\n' "$worktree_root"
     printf 'Branch: %s\n' "$branch_name"
 
-    enter_prepared_worktree "$worktree_root"
+    enter_prepared_worktree "$worktree_root" || return 1
 }
 
 main "$@"

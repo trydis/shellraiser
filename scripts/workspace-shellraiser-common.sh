@@ -214,8 +214,8 @@ resolve_registered_branch_for_worktree() {
     fi
 }
 
-# Creates or reuses a linked worktree for the workspace and prints `<path><tab><branch>`.
-prepare_workspace_worktree() {
+# Creates or reuses a linked worktree for the workspace and prints `<path><tab><branch><tab><status>`.
+prepare_workspace_worktree_with_status() {
     local repo_root="$1"
     local workspace_name="$2"
     local branch_name worktree_path existing_worktree_path registered_branch
@@ -238,7 +238,7 @@ prepare_workspace_worktree() {
             fail_with_message "Branch '$branch_name' is already checked out at '$existing_worktree_path', not '$worktree_path'."
         fi
 
-        printf '%s\t%s\n' "$worktree_path" "$branch_name"
+        printf '%s\t%s\texisting\n' "$worktree_path" "$branch_name"
         return 0
     fi
 
@@ -254,7 +254,54 @@ prepare_workspace_worktree() {
         fail_with_message "Failed to create worktree '$worktree_path' from base branch 'main'."
     fi
 
+    printf '%s\t%s\tcreated\n' "$worktree_path" "$branch_name"
+}
+
+# Creates or reuses a linked worktree for the workspace and prints `<path><tab><branch>`.
+prepare_workspace_worktree() {
+    local worktree_path branch_name worktree_status
+
+    IFS=$'\t' read -r worktree_path branch_name worktree_status < <(
+        prepare_workspace_worktree_with_status "$@"
+    )
+    [[ -n "$worktree_path" && -n "$branch_name" && -n "$worktree_status" ]] \
+        || fail_with_message "Failed to resolve the workspace worktree."
+
     printf '%s\t%s\n' "$worktree_path" "$branch_name"
+}
+
+# Initializes the Ghostty submodule and builds the native XCFramework for a new worktree.
+bootstrap_ghostty_for_worktree() {
+    local worktree_root="$1"
+    local ghostty_root="$worktree_root/ghostty"
+
+    printf 'Initializing ghostty submodule in %s\n' "$worktree_root"
+    if ! (
+        cd "$worktree_root" &&
+        git submodule update --init --recursive ghostty
+    ); then
+        fail_with_message "Failed to initialize the 'ghostty' submodule in '$worktree_root'."
+    fi
+
+    if [[ ! -d "$ghostty_root" ]]; then
+        fail_with_message "Ghostty submodule directory '$ghostty_root' was not created."
+    fi
+
+    if ! command -v zig >/dev/null 2>&1; then
+        fail_with_message "Required command 'zig' was not found in PATH."
+    fi
+
+    printf 'Building Ghostty XCFramework in %s\n' "$ghostty_root"
+    if ! (
+        cd "$ghostty_root" &&
+        zig build \
+            -Demit-xcframework=true \
+            -Demit-macos-app=false \
+            -Dxcframework-target=native \
+            -Doptimize=ReleaseFast
+    ); then
+        fail_with_message "Failed to build Ghostty XCFramework in '$ghostty_root'."
+    fi
 }
 
 # Prompts the user for an interactive yes/no confirmation.
