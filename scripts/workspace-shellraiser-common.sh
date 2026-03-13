@@ -11,6 +11,11 @@ fail_workspace_name_required() {
     fail_with_message "Workspace name is required."
 }
 
+# Prints the standard worktree-name guidance and exits with failure.
+fail_worktree_name_required() {
+    fail_with_message "Worktree name is required."
+}
+
 # Returns the Git repository root for the current invocation path.
 resolve_repo_root() {
     if ! git rev-parse --show-toplevel 2>/dev/null; then
@@ -58,6 +63,25 @@ resolve_workspace_name() {
     fi
 
     printf '%s\n' "$workspace_name"
+}
+
+# Returns the requested worktree name from arguments or an interactive prompt.
+resolve_worktree_name() {
+    local worktree_name
+
+    if (($# > 0)); then
+        worktree_name="$*"
+    else
+        if ! read -r -p "Worktree name: " worktree_name; then
+            fail_worktree_name_required
+        fi
+    fi
+
+    if [[ -z "${worktree_name//[[:space:]]/}" ]]; then
+        fail_worktree_name_required
+    fi
+
+    printf '%s\n' "$worktree_name"
 }
 
 # Returns a workspace slug that is safe for Git branch and directory names.
