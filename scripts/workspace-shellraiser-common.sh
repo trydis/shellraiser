@@ -3,6 +3,10 @@
 # Prints an error message and exits with failure.
 fail_with_message() {
     echo "$1" >&2
+    if [[ "${SHELLRAISER_SCRIPT_SOURCED:-0}" == "1" ]]; then
+        return 1
+    fi
+
     exit 1
 }
 
