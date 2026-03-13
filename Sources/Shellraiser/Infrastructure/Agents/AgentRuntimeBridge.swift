@@ -499,6 +499,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
             attempts=0
             while [ "$attempts" -lt 40 ]; do
+                [ -f "$stamp_file" ] || exit 0
+
                 while IFS= read -r session_file; do
                     [ -f "$session_file" ] || continue
                     first_line="$(sed -n '1p' "$session_file" 2>/dev/null || true)"
@@ -540,10 +542,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             stamp_file="${TMPDIR:-/tmp}/schmux-codex-${surface}-$$.stamp"
             start_timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             : > "$stamp_file"
-            (
-                monitor_codex_session "$stamp_file" "$start_timestamp" "$helper" "$surface"
-                rm -f "$stamp_file"
-            ) >/dev/null 2>&1 &
+            monitor_codex_session "$stamp_file" "$start_timestamp" "$helper" "$surface" >/dev/null 2>&1 &
+            monitor_pid="$!"
         fi
 
         notify_config="notify=[\"$SHELLRAISER_HELPER_PATH\",\"codex\",\"$SHELLRAISER_SURFACE_ID\",\"completed\"]"
@@ -551,6 +551,18 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         "$real" -c "$notify_config" "$@"
         status=$?
         set -e
+        if [ -n "${monitor_pid:-}" ]; then
+            rm -f "$stamp_file"
+            wait_attempts=0
+            while kill -0 "$monitor_pid" 2>/dev/null && [ "$wait_attempts" -lt 10 ]; do
+                sleep 0.1
+                wait_attempts=$((wait_attempts + 1))
+            done
+            if kill -0 "$monitor_pid" 2>/dev/null; then
+                kill "$monitor_pid" 2>/dev/null || true
+            fi
+            wait "$monitor_pid" 2>/dev/null || true
+        fi
         "$helper" codex "$surface" exited || true
         exit "$status"
         """#

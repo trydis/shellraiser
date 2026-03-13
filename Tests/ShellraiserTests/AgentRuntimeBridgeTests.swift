@@ -73,6 +73,9 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(codexWrapperContents.contains("normalize_codex_session_timestamp"))
         XCTAssertTrue(codexWrapperContents.contains("timestamp_is_at_or_after"))
         XCTAssertTrue(codexWrapperContents.contains("printf '%-9.9s'"))
+        XCTAssertTrue(codexWrapperContents.contains("monitor_pid=\"$!\""))
+        XCTAssertTrue(codexWrapperContents.contains("rm -f \"$stamp_file\""))
+        XCTAssertTrue(codexWrapperContents.contains("wait \"$monitor_pid\" 2>/dev/null || true"))
     }
 
     /// Verifies the helper can extract Claude hook session identifiers from stdin payloads.
