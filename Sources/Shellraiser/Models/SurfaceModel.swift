@@ -39,7 +39,7 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         agentType: AgentType,
         sessionId: String,
         transcriptPath: String = "",
-        shouldResumeSession: Bool,
+        shouldResumeSession: Bool = false,
         terminalConfig: TerminalPanelConfig,
         isIdle: Bool,
         hasUnreadIdleNotification: Bool,
