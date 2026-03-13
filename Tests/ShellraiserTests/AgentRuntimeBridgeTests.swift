@@ -68,9 +68,11 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" session"))
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" exited"))
         XCTAssertTrue(codexWrapperContents.contains("extract_codex_session_timestamp"))
+        XCTAssertTrue(codexWrapperContents.contains("extract_codex_surface_id"))
+        XCTAssertTrue(codexWrapperContents.contains("surface_matches_current_codex_session"))
         XCTAssertTrue(codexWrapperContents.contains("normalize_codex_session_timestamp"))
         XCTAssertTrue(codexWrapperContents.contains("timestamp_is_at_or_after"))
-        XCTAssertTrue(codexWrapperContents.contains("sed -E 's/\\.[0-9]+Z$/Z/'"))
+        XCTAssertTrue(codexWrapperContents.contains("printf '%-9.9s'"))
     }
 
     /// Verifies the helper can extract Claude hook session identifiers from stdin payloads.

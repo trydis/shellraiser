@@ -431,8 +431,53 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                     | head -n 1
             }
 
+            extract_codex_surface_id() {
+                session_line="$1"
+                surface_value="$(
+                    printf '%s\n' "$session_line" \
+                        | sed -n 's/.*"surface_id":"\([^"]*\)".*/\1/p' \
+                        | head -n 1
+                )"
+                if [ -n "$surface_value" ]; then
+                    printf '%s\n' "$surface_value"
+                    return 0
+                fi
+
+                surface_value="$(
+                    printf '%s\n' "$session_line" \
+                        | sed -n 's/.*"notify":\[[^]]*"codex","\([^"]*\)","completed"[^]]*\].*/\1/p' \
+                        | head -n 1
+                )"
+                if [ -n "$surface_value" ]; then
+                    printf '%s\n' "$surface_value"
+                    return 0
+                fi
+
+                printf '%s\n' "$session_line" \
+                    | sed -n 's/.*"notify":"[^"]*\\\\"codex\\\\",\\\\"\([^"]*\)\\\\",\\\\"completed\\\\"[^"]*".*/\1/p' \
+                    | head -n 1
+            }
+
             normalize_codex_session_timestamp() {
-                printf '%s\n' "${1:-}" | sed -E 's/\.[0-9]+Z$/Z/'
+                timestamp="${1:-}"
+                case "$timestamp" in
+                    *.*Z)
+                        base="${timestamp%%.*}"
+                        fraction="${timestamp#*.}"
+                        fraction="${fraction%Z}"
+                        ;;
+                    *Z)
+                        base="${timestamp%Z}"
+                        fraction=""
+                        ;;
+                    *)
+                        printf '%s\n' "$timestamp"
+                        return 0
+                        ;;
+                esac
+
+                fraction="$(printf '%-9.9s' "$fraction" | tr ' ' '0')"
+                printf '%s.%sZ\n' "$base" "$fraction"
             }
 
             timestamp_is_at_or_after() {
@@ -446,35 +491,42 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 [ "$latest_timestamp" = "$candidate_timestamp" ]
             }
 
+            surface_matches_current_codex_session() {
+                session_line="$1"
+                candidate_surface_id="$(extract_codex_surface_id "$session_line")"
+                [ -n "$candidate_surface_id" ] && [ "$candidate_surface_id" = "$surface_id" ]
+            }
+
             attempts=0
             while [ "$attempts" -lt 40 ]; do
-                session_file="$(
-                    find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null \
-                        | sort \
-                        | tail -n 1
-                )"
-
-                if [ -n "$session_file" ] && [ -f "$session_file" ]; then
+                while IFS= read -r session_file; do
+                    [ -f "$session_file" ] || continue
                     first_line="$(sed -n '1p' "$session_file" 2>/dev/null || true)"
-                    if printf '%s\n' "$first_line" | grep -F "\"cwd\":\"$cwd\"" >/dev/null; then
-                        session_timestamp="$(extract_codex_session_timestamp "$first_line")"
-                        if [ -n "$session_timestamp" ] && ! timestamp_is_at_or_after "$session_timestamp" "$start_timestamp"; then
-                            attempts=$((attempts + 1))
-                            sleep 0.5
-                            continue
-                        fi
-
-                        session_id="$(
-                            printf '%s\n' "$first_line" \
-                                | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' \
-                                | head -n 1
-                        )"
-                        if [ -n "$session_id" ]; then
-                            "$helper_path" codex "$surface_id" session "$session_id" || true
-                            exit 0
-                        fi
+                    if ! printf '%s\n' "$first_line" | grep -F "\"cwd\":\"$cwd\"" >/dev/null; then
+                        continue
                     fi
-                fi
+
+                    if ! surface_matches_current_codex_session "$first_line"; then
+                        continue
+                    fi
+
+                    session_timestamp="$(extract_codex_session_timestamp "$first_line")"
+                    if [ -n "$session_timestamp" ] && ! timestamp_is_at_or_after "$session_timestamp" "$start_timestamp"; then
+                        continue
+                    fi
+
+                    session_id="$(
+                        printf '%s\n' "$first_line" \
+                            | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' \
+                            | head -n 1
+                    )"
+                    if [ -n "$session_id" ]; then
+                        "$helper_path" codex "$surface_id" session "$session_id" || true
+                        exit 0
+                    fi
+                done <<EOF
+        $(find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null | sort -r)
+        EOF
 
                 attempts=$((attempts + 1))
                 sleep 0.5
