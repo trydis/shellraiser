@@ -4,6 +4,18 @@ import AppKit
 /// App delegate that confirms before allowing the application to terminate.
 @MainActor
 final class ShellraiserAppDelegate: NSObject, NSApplicationDelegate {
+    /// Test seam used to override quit confirmation without presenting AppKit UI.
+    var confirmQuit: () -> Bool = {
+        let alert = NSAlert()
+        alert.messageText = "Quit Shellraiser?"
+        alert.informativeText = "All workspaces and terminal sessions will be closed."
+        alert.addButton(withTitle: "Quit Shellraiser")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     /// Routes top-level AppleScript keys to the app delegate.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
         key == "terminals" || key == "surfaceConfigurations" || key == "workspaces"
@@ -84,19 +96,12 @@ final class ShellraiserAppDelegate: NSObject, NSApplicationDelegate {
 
     /// Intercepts standard app termination and requires explicit user confirmation.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let alert = NSAlert()
-        alert.messageText = "Quit Shellraiser?"
-        alert.informativeText = "All workspaces and terminal sessions will be closed."
-        alert.addButton(withTitle: "Quit Shellraiser")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        return switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            .terminateNow
-        default:
-            .terminateCancel
+        guard confirmQuit() else {
+            return .terminateCancel
         }
+
+        ShellraiserScriptingController.shared.prepareForTermination()
+        return .terminateNow
     }
 }
 

@@ -21,6 +21,8 @@ struct PendingCompletionTarget {
 enum AgentActivityPhase: String {
     case started
     case completed
+    case session
+    case exited
 }
 
 /// Parsed activity event emitted by managed Claude/Codex wrappers.

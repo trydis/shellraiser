@@ -1,6 +1,114 @@
 import Foundation
 
 extension WorkspaceSurfaceManager {
+    /// Persists the resolved agent runtime and session identifier for a surface.
+    func setSessionIdentity(
+        workspaceId: UUID,
+        surfaceId: UUID,
+        agentType: AgentType,
+        sessionId: String,
+        transcriptPath: String? = nil,
+        workspaces: inout [WorkspaceModel],
+        persistence: any WorkspacePersisting
+    ) {
+        let normalizedSessionId = normalizedSessionId(for: agentType, sessionId: sessionId)
+        guard !normalizedSessionId.isEmpty else { return }
+        let resolvedTranscriptPath: String?
+        if let transcriptPath {
+            resolvedTranscriptPath = normalizedTranscriptPath(for: agentType, transcriptPath: transcriptPath)
+        } else {
+            resolvedTranscriptPath = nil
+        }
+
+        var didChange = false
+
+        mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
+            _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
+                if surface.agentType != agentType {
+                    surface.agentType = agentType
+                    didChange = true
+                }
+
+                if surface.sessionId != normalizedSessionId {
+                    surface.sessionId = normalizedSessionId
+                    didChange = true
+                }
+
+                switch agentType {
+                case .claudeCode:
+                    if let resolvedTranscriptPath,
+                       surface.transcriptPath != resolvedTranscriptPath {
+                        surface.transcriptPath = resolvedTranscriptPath
+                        didChange = true
+                    }
+                case .codex:
+                    if !surface.transcriptPath.isEmpty {
+                        surface.transcriptPath = ""
+                        didChange = true
+                    }
+                }
+
+                if !surface.shouldResumeSession {
+                    surface.shouldResumeSession = true
+                    didChange = true
+                }
+            }
+        }
+
+        if didChange {
+            persistence.save(workspaces)
+        }
+    }
+
+    /// Normalizes stored session identifiers so resume commands use a stable persisted value.
+    private func normalizedSessionId(for agentType: AgentType, sessionId: String) -> String {
+        let trimmedSessionId = sessionId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSessionId.isEmpty else { return "" }
+
+        switch agentType {
+        case .claudeCode:
+            return trimmedSessionId.lowercased()
+        case .codex:
+            return trimmedSessionId
+        }
+    }
+
+    /// Normalizes persisted transcript locations used to validate Claude resume availability.
+    private func normalizedTranscriptPath(for agentType: AgentType, transcriptPath: String) -> String {
+        let trimmedTranscriptPath = transcriptPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTranscriptPath.isEmpty else { return "" }
+
+        switch agentType {
+        case .claudeCode:
+            return trimmedTranscriptPath
+        case .codex:
+            return ""
+        }
+    }
+
+    /// Updates whether a surface should attempt session resume on the next launch.
+    func setResumeEligibility(
+        workspaceId: UUID,
+        surfaceId: UUID,
+        shouldResumeSession: Bool,
+        workspaces: inout [WorkspaceModel],
+        persistence: any WorkspacePersisting
+    ) {
+        var didChange = false
+
+        mutateWorkspace(id: workspaceId, workspaces: &workspaces) { workspace in
+            _ = workspace.rootPane.mutateSurface(surfaceId: surfaceId) { surface in
+                guard surface.shouldResumeSession != shouldResumeSession else { return }
+                surface.shouldResumeSession = shouldResumeSession
+                didChange = true
+            }
+        }
+
+        if didChange {
+            persistence.save(workspaces)
+        }
+    }
+
     /// Updates idle state for a surface and tracks unread idle notifications.
     func setIdleState(
         workspaceId: UUID,

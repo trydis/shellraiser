@@ -209,11 +209,12 @@ final class GhosttyRuntime {
 
         let workingDirectory = Self.effectiveWorkingDirectory(from: terminalConfig.workingDirectory)
         let command = Self.launchCommand(
-            shell: terminalConfig.shell,
-            workingDirectory: workingDirectory
+            for: surfaceModel,
+            terminalConfig: terminalConfig
         )
         let environment = mergedEnvironment(
-            for: terminalConfig,
+            surfaceModel: surfaceModel,
+            terminalConfig: terminalConfig,
             surfaceId: surfaceModel.id
         )
 
@@ -995,7 +996,20 @@ final class GhosttyRuntime {
     static func launchCommand(for terminalConfig: TerminalPanelConfig) -> String {
         launchCommand(
             shell: terminalConfig.shell,
-            workingDirectory: effectiveWorkingDirectory(from: terminalConfig.workingDirectory)
+            workingDirectory: effectiveWorkingDirectory(from: terminalConfig.workingDirectory),
+            executable: nil
+        )
+    }
+
+    /// Creates the launch command for a specific surface, resuming managed agent sessions when possible.
+    static func launchCommand(
+        for surfaceModel: SurfaceModel,
+        terminalConfig: TerminalPanelConfig
+    ) -> String {
+        launchCommand(
+            shell: terminalConfig.shell,
+            workingDirectory: effectiveWorkingDirectory(from: terminalConfig.workingDirectory),
+            executable: resumableExecutable(for: surfaceModel)
         )
     }
 
@@ -1009,20 +1023,50 @@ final class GhosttyRuntime {
     }
 
     /// Creates the shell command passed into Ghostty surface creation from normalized inputs.
-    private static func launchCommand(shell: String, workingDirectory: String?) -> String {
-        let escapedShell = shell.shellEscaped
+    private static func launchCommand(
+        shell: String,
+        workingDirectory: String?,
+        executable: (command: String, arguments: [String])?
+    ) -> String {
+        let executableInvocation = escapedExecutableInvocation(
+            command: executable?.command ?? shell,
+            arguments: executable?.arguments ?? []
+        )
 
         guard let workingDirectory else {
-            return escapedShell
+            return executableInvocation
         }
 
-        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(escapedShell)"
+        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(executableInvocation)"
         return "\("/bin/sh".shellEscaped) -lc \(script.shellEscaped)"
+    }
+
+    /// Resolves the executable used to reopen a managed agent session when its resume artifacts exist.
+    private static func resumableExecutable(
+        for surfaceModel: SurfaceModel
+    ) -> (command: String, arguments: [String])? {
+        guard surfaceModel.shouldResumeSession else { return nil }
+
+        switch surfaceModel.agentType {
+        case .claudeCode:
+            guard hasClaudeResumeTranscript(for: surfaceModel) else { return nil }
+            return surfaceModel.agentType.resumeCommand(sessionId: surfaceModel.sessionId)
+        case .codex:
+            return surfaceModel.agentType.resumeCommand(sessionId: surfaceModel.sessionId)
+        }
+    }
+
+    /// Returns whether Claude has persisted a transcript artifact that can be resumed on disk.
+    private static func hasClaudeResumeTranscript(for surfaceModel: SurfaceModel) -> Bool {
+        let transcriptPath = surfaceModel.transcriptPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcriptPath.isEmpty else { return false }
+        return FileManager.default.fileExists(atPath: transcriptPath)
     }
 
     /// Merges runtime environment variables for terminal launch.
     private func mergedEnvironment(
-        for terminalConfig: TerminalPanelConfig,
+        surfaceModel _: SurfaceModel,
+        terminalConfig: TerminalPanelConfig,
         surfaceId: UUID
     ) -> [String: String] {
         var env = terminalConfig.environment
@@ -1033,6 +1077,13 @@ final class GhosttyRuntime {
             shellPath: terminalConfig.shell,
             baseEnvironment: env
         )
+    }
+
+    /// Escapes a direct executable invocation for Ghostty's shell-command launch path.
+    private static func escapedExecutableInvocation(command: String, arguments: [String]) -> String {
+        ([command] + arguments)
+            .map(\.shellEscaped)
+            .joined(separator: " ")
     }
 
     /// Converts AppKit modifier flags to Ghostty modifier bits.

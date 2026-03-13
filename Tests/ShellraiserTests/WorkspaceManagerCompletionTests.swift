@@ -229,6 +229,188 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
+    /// Verifies session-identity events persist the resolved runtime and resume identifier.
+    func testSessionEventPersistsSurfaceSessionIdentity() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(
+            persistence: persistence,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001137")!,
+            title: "Session Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001138")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001139")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_525),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .session,
+                payload: "DA38C283-06C0-4D30-AADA-C9552606D76A\n/tmp/claude-transcript.jsonl"
+            )
+        )
+
+        let persistedSurface = self.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertEqual(persistedSurface?.agentType, .claudeCode)
+        XCTAssertEqual(persistedSurface?.sessionId, "da38c283-06c0-4d30-aada-c9552606d76a")
+        XCTAssertEqual(persistedSurface?.transcriptPath, "/tmp/claude-transcript.jsonl")
+        XCTAssertTrue(persistedSurface?.shouldResumeSession ?? false)
+        XCTAssertEqual(persistence.load(), manager.workspaces)
+    }
+
+    /// Verifies exit events disable future auto-resume while the app remains running.
+    func testExitedEventClearsResumeEligibilityWhenNotTerminating() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(
+            persistence: persistence,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001149")!,
+            title: "Exit Surface",
+            sessionId: "existing-session",
+            shouldResumeSession: true
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001150")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001151")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_530),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .exited,
+                payload: ""
+            )
+        )
+
+        let persistedSurface = self.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertFalse(persistedSurface?.shouldResumeSession ?? true)
+        XCTAssertEqual(persistedSurface?.sessionId, "existing-session")
+        XCTAssertEqual(persistence.load(), manager.workspaces)
+    }
+
+    /// Verifies app termination preserves resume eligibility for sessions that were still active.
+    func testExitedEventDoesNotClearResumeEligibilityDuringTermination() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(
+            persistence: persistence,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001152")!,
+            title: "Terminating Surface",
+            sessionId: "existing-session",
+            shouldResumeSession: true
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001153")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001154")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.prepareForTermination()
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_531),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .exited,
+                payload: ""
+            )
+        )
+
+        let persistedSurface = self.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertTrue(persistedSurface?.shouldResumeSession ?? false)
+        XCTAssertEqual(persistedSurface?.sessionId, "existing-session")
+        XCTAssertEqual(persistence.load(), manager.workspaces)
+    }
+
+    /// Verifies live child exits still close their owning surface outside app termination.
+    func testHandleSurfaceChildExitClosesSurfaceWhenNotTerminating() {
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(persistence: persistence)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001155")!,
+            title: "Exited Surface",
+            sessionId: "existing-session",
+            shouldResumeSession: true
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001156")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001157")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.handleSurfaceChildExit(workspaceId: workspaceId, surfaceId: surface.id)
+
+        XCTAssertNil(self.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id))
+        XCTAssertEqual(persistence.load(), manager.workspaces)
+    }
+
+    /// Verifies app shutdown ignores child exits so resumable surfaces remain persisted.
+    func testHandleSurfaceChildExitPreservesSurfaceDuringTermination() {
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(persistence: persistence)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001158")!,
+            title: "Terminating Exit Surface",
+            sessionId: "existing-session",
+            shouldResumeSession: true
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001159")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001160")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.prepareForTermination()
+
+        manager.handleSurfaceChildExit(workspaceId: workspaceId, surfaceId: surface.id)
+
+        let persistedSurface = self.surface(in: manager.workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertEqual(persistedSurface?.sessionId, "existing-session")
+        XCTAssertTrue(persistedSurface?.shouldResumeSession ?? false)
+        XCTAssertEqual(persistence.load(), manager.workspaces)
+    }
+
     /// Verifies Codex terminal input marks the owning workspace busy until completion is observed.
     func testNoteSurfaceActivityMarksCodexWorkspaceBusy() {
         let manager = makeWorkspaceManager()

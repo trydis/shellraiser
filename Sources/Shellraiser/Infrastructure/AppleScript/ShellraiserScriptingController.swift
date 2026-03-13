@@ -30,6 +30,11 @@ final class ShellraiserScriptingController {
         self.workspaceManager = workspaceManager
     }
 
+    /// Forwards app-termination preparation to the installed workspace manager.
+    func prepareForTermination() {
+        workspaceManager?.prepareForTermination()
+    }
+
     /// Returns scriptable terminal objects for every open terminal surface.
     func terminals() -> [ScriptableTerminal] {
         terminalSnapshots().map(ScriptableTerminal.init(snapshot:))

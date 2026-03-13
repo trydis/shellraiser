@@ -179,7 +179,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         payload=""
         case "$phase" in
-            started|completed)
+            started|completed|session|exited|hook-session)
                 ;;
             *)
                 exit 0
@@ -190,7 +190,22 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             codex:completed)
                 payload="${4:-}"
                 ;;
+            codex:session|claudeCode:session)
+                payload="${4:-}"
+                ;;
+            claudeCode:hook-session)
+                hook_payload="$(cat)"
+                compact_payload="$(printf '%s' "$hook_payload" | tr -d '\n')"
+                session_id="$(printf '%s' "$compact_payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]' | sed -n '1p')"
+                transcript_path="$(printf '%s' "$compact_payload" | sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
+                payload="$(printf '%s\n%s' "$session_id" "$transcript_path")"
+                phase="session"
+                ;;
         esac
+
+        if [ "$phase" = "session" ] && [ -z "$payload" ]; then
+            exit 0
+        fi
 
         timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
         encoded="$(printf '%s' "$payload" | /usr/bin/base64 | tr -d '\n')"
@@ -233,6 +248,26 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         cat > "$settings_file" <<EOF
         {
           "hooks": {
+            "SessionStart": [
+              {
+                "matcher": "startup",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" hook-session"
+                  }
+                ]
+              },
+              {
+                "matcher": "resume",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" hook-session"
+                  }
+                ]
+              }
+            ],
             "UserPromptSubmit": [
               {
                 "hooks": [
@@ -299,7 +334,12 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         }
         EOF
 
-        exec "$real" --settings "$settings_file" "$@"
+        set +e
+        "$real" --settings "$settings_file" "$@"
+        status=$?
+        set -e
+        "$helper" claudeCode "$surface" exited || true
+        exit "$status"
         """#
     }
 
@@ -329,8 +369,138 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
 
+        parse_codex_session_id() {
+            case "${1:-}" in
+                resume|fork)
+                    shift
+                    while [ "$#" -gt 0 ]; do
+                        case "$1" in
+                            --*)
+                                shift
+                                ;;
+                            *)
+                                printf '%s\n' "$1"
+                                return 0
+                                ;;
+                        esac
+                    done
+                    ;;
+            esac
+
+            return 1
+        }
+
+        codex_is_interactive_start() {
+            case "${1:-}" in
+                ""|-*|resume|fork)
+                    return 0
+                    ;;
+                exec|review|login|logout|mcp|mcp-server|app-server|app|completion|sandbox|debug|apply|cloud|features|help)
+                    return 1
+                    ;;
+                *)
+                    return 0
+                    ;;
+            esac
+        }
+
+        monitor_codex_session() {
+            root="${HOME}/.codex/sessions"
+            cwd="$(pwd)"
+            stamp_file="$1"
+            start_timestamp="$2"
+            helper_path="$3"
+            surface_id="$4"
+
+            [ -d "$root" ] || exit 0
+
+            extract_codex_session_timestamp() {
+                session_line="$1"
+                payload_timestamp="$(
+                    printf '%s\n' "$session_line" \
+                        | sed -n 's/.*"timestamp":"[^"]*".*"timestamp":"\([^"]*\)".*/\1/p' \
+                        | head -n 1
+                )"
+                if [ -n "$payload_timestamp" ]; then
+                    printf '%s\n' "$payload_timestamp"
+                    return 0
+                fi
+
+                printf '%s\n' "$session_line" \
+                    | sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p' \
+                    | head -n 1
+            }
+
+            normalize_codex_session_timestamp() {
+                printf '%s\n' "${1:-}" | sed -E 's/\.[0-9]+Z$/Z/'
+            }
+
+            timestamp_is_at_or_after() {
+                candidate_timestamp="$(normalize_codex_session_timestamp "$1")"
+                baseline_timestamp="$(normalize_codex_session_timestamp "$2")"
+                latest_timestamp="$(
+                    LC_ALL=C printf '%s\n%s\n' "$candidate_timestamp" "$baseline_timestamp" \
+                        | LC_ALL=C sort \
+                        | tail -n 1
+                )"
+                [ "$latest_timestamp" = "$candidate_timestamp" ]
+            }
+
+            attempts=0
+            while [ "$attempts" -lt 40 ]; do
+                session_file="$(
+                    find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null \
+                        | sort \
+                        | tail -n 1
+                )"
+
+                if [ -n "$session_file" ] && [ -f "$session_file" ]; then
+                    first_line="$(sed -n '1p' "$session_file" 2>/dev/null || true)"
+                    if printf '%s\n' "$first_line" | grep -F "\"cwd\":\"$cwd\"" >/dev/null; then
+                        session_timestamp="$(extract_codex_session_timestamp "$first_line")"
+                        if [ -n "$session_timestamp" ] && ! timestamp_is_at_or_after "$session_timestamp" "$start_timestamp"; then
+                            attempts=$((attempts + 1))
+                            sleep 0.5
+                            continue
+                        fi
+
+                        session_id="$(
+                            printf '%s\n' "$first_line" \
+                                | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' \
+                                | head -n 1
+                        )"
+                        if [ -n "$session_id" ]; then
+                            "$helper_path" codex "$surface_id" session "$session_id" || true
+                            exit 0
+                        fi
+                    fi
+                fi
+
+                attempts=$((attempts + 1))
+                sleep 0.5
+            done
+        }
+
+        session_id="$(parse_codex_session_id "$@" || true)"
+        if [ -n "$session_id" ]; then
+            "$helper" codex "$surface" session "$session_id" || true
+        elif codex_is_interactive_start "${1:-}"; then
+            stamp_file="${TMPDIR:-/tmp}/schmux-codex-${surface}-$$.stamp"
+            start_timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            : > "$stamp_file"
+            (
+                monitor_codex_session "$stamp_file" "$start_timestamp" "$helper" "$surface"
+                rm -f "$stamp_file"
+            ) >/dev/null 2>&1 &
+        fi
+
         notify_config="notify=[\"$SHELLRAISER_HELPER_PATH\",\"codex\",\"$SHELLRAISER_SURFACE_ID\",\"completed\"]"
-        exec "$real" -c "$notify_config" "$@"
+        set +e
+        "$real" -c "$notify_config" "$@"
+        status=$?
+        set -e
+        "$helper" codex "$surface" exited || true
+        exit "$status"
         """#
     }
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Workspace lifecycle and selection flows for the shared manager.
@@ -144,6 +145,13 @@ extension WorkspaceManager {
     /// Persists the current workspace collection.
     func save() {
         persistence.save(workspaces)
+    }
+
+    /// Freezes resume invalidation so active agent sessions remain resumable across app shutdown.
+    func prepareForTermination() {
+        guard !isTerminating else { return }
+        isTerminating = true
+        save()
     }
 
     /// Selects workspace by 1-based index in sidebar order.

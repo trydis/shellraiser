@@ -248,6 +248,7 @@ final class PaneNodeModelOperationsTests: XCTestCase {
             title: title,
             agentType: .codex,
             sessionId: "session-\(title)",
+            shouldResumeSession: false,
             terminalConfig: TerminalPanelConfig(
                 workingDirectory: "/tmp",
                 shell: "/bin/zsh",

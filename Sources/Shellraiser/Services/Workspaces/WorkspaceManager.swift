@@ -85,6 +85,8 @@ final class WorkspaceManager: ObservableObject {
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
     var recentlyHandledSurfaceExpirations: [UUID: Date] = [:]
     var hasLoadedPersistedWorkspaces = false
+    var isTerminating = false
+    var willTerminateObserver: NSObjectProtocol?
 
     /// Creates a manager with explicit dependencies for testability.
     init(
@@ -120,6 +122,15 @@ final class WorkspaceManager: ObservableObject {
         resolvedActivityEventMonitor.onEvent = { [weak self] event in
             self?.handleAgentActivityEvent(event)
         }
+        willTerminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.prepareForTermination()
+            }
+        }
 
         if registersLocalShortcutMonitor {
             registerLocalShortcutMonitor()
@@ -129,6 +140,9 @@ final class WorkspaceManager: ObservableObject {
     deinit {
         if let localShortcutMonitor {
             NSEvent.removeMonitor(localShortcutMonitor)
+        }
+        if let willTerminateObserver {
+            NotificationCenter.default.removeObserver(willTerminateObserver)
         }
     }
 }
