@@ -5,6 +5,16 @@ import XCTest
 /// Covers application-delegate termination wiring.
 @MainActor
 final class ShellraiserAppTests: WorkspaceTestCase {
+    override func setUp() {
+        super.setUp()
+        ShellraiserScriptingController.shared.resetForTesting()
+    }
+
+    override func tearDown() {
+        ShellraiserScriptingController.shared.resetForTesting()
+        super.tearDown()
+    }
+
     /// Verifies confirmed app termination freezes manager shutdown state before teardown proceeds.
     func testApplicationShouldTerminatePreparesWorkspaceManagerBeforeQuitting() {
         let manager = makeWorkspaceManager()
