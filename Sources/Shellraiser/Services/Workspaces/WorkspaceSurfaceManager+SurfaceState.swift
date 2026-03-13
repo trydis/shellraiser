@@ -29,13 +29,21 @@ extension WorkspaceSurfaceManager {
                     didChange = true
                 }
 
-                if surface.sessionId != normalizedSessionId {
+                let sessionIdDidChange = surface.sessionId != normalizedSessionId
+                if sessionIdDidChange {
                     surface.sessionId = normalizedSessionId
                     didChange = true
                 }
 
                 switch agentType {
                 case .claudeCode:
+                    if sessionIdDidChange || resolvedTranscriptPath == nil {
+                        if !surface.transcriptPath.isEmpty {
+                            surface.transcriptPath = ""
+                            didChange = true
+                        }
+                    }
+
                     if let resolvedTranscriptPath,
                        surface.transcriptPath != resolvedTranscriptPath {
                         surface.transcriptPath = resolvedTranscriptPath

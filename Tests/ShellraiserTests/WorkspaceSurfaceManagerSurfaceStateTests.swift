@@ -76,6 +76,44 @@ final class WorkspaceSurfaceManagerSurfaceStateTests: WorkspaceTestCase {
         XCTAssertEqual(updatedSurface?.sessionId, "019ce8bb-b369-7693-9be0-664a228e4e24")
     }
 
+    /// Verifies Claude transcript state is cleared when a new session arrives without a transcript path.
+    func testSetSessionIdentityClearsClaudeTranscriptPathWhenTranscriptIsMissing() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000008A1")!,
+            title: "Claude Surface",
+            agentType: .claudeCode,
+            sessionId: "existing-session",
+            transcriptPath: "/tmp/claude-transcript.jsonl"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-0000000008A2")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-0000000008A3")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.setSessionIdentity(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            agentType: .claudeCode,
+            sessionId: "DA38C283-06C0-4D30-AADA-C9552606D76A",
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        let updatedSurface = self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertEqual(updatedSurface?.agentType, .claudeCode)
+        XCTAssertEqual(updatedSurface?.sessionId, "da38c283-06c0-4d30-aada-c9552606d76a")
+        XCTAssertEqual(updatedSurface?.transcriptPath, "")
+        XCTAssertTrue(updatedSurface?.shouldResumeSession ?? false)
+        XCTAssertEqual(persistence.load(), workspaces)
+    }
+
     /// Verifies resume eligibility can be cleared without discarding the stored session identifier.
     func testSetResumeEligibilityPersistsFalseWithoutClearingSessionId() {
         let persistence = makePersistence()
