@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 /// Workspace lifecycle and selection flows for the shared manager.
