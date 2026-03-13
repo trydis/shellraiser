@@ -217,9 +217,10 @@ struct PaneLeafView: View {
                             )
                         },
                         onChildExited: {
-                            guard let workspace = manager.workspace(id: workspaceId) else { return }
-                            guard let paneId = workspace.rootPane.paneId(containing: activeSurface.id) else { return }
-                            manager.closeSurface(workspaceId: workspaceId, paneId: paneId, surfaceId: activeSurface.id)
+                            manager.handleSurfaceChildExit(
+                                workspaceId: workspaceId,
+                                surfaceId: activeSurface.id
+                            )
                         },
                         onPaneNavigationRequest: { direction in
                             manager.focusAdjacentPane(from: activeSurface.id, direction: direction)

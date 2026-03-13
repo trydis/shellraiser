@@ -30,6 +30,8 @@ class WorkspaceTestCase: XCTestCase {
         title: String = "~",
         agentType: AgentType = .codex,
         sessionId: String = "",
+        transcriptPath: String = "",
+        shouldResumeSession: Bool = false,
         isIdle: Bool = false,
         hasUnreadIdleNotification: Bool = false,
         hasPendingCompletion: Bool = false,
@@ -42,6 +44,8 @@ class WorkspaceTestCase: XCTestCase {
             title: title,
             agentType: agentType,
             sessionId: sessionId,
+            transcriptPath: transcriptPath,
+            shouldResumeSession: shouldResumeSession,
             terminalConfig: TerminalPanelConfig(
                 workingDirectory: "/tmp",
                 shell: "/bin/zsh",

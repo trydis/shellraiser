@@ -143,6 +143,27 @@ extension WorkspaceManager {
                 timestamp: event.timestamp,
                 payload: event.payload
             )
+        case .session:
+            let identity = parsedSessionIdentity(from: event)
+            surfaceManager.setSessionIdentity(
+                workspaceId: target.workspaceId,
+                surfaceId: event.surfaceId,
+                agentType: event.agentType,
+                sessionId: identity.sessionId,
+                transcriptPath: identity.transcriptPath,
+                workspaces: &workspaces,
+                persistence: persistence
+            )
+        case .exited:
+            clearBusySurface(event.surfaceId)
+            guard !isTerminating else { return }
+            surfaceManager.setResumeEligibility(
+                workspaceId: target.workspaceId,
+                surfaceId: event.surfaceId,
+                shouldResumeSession: false,
+                workspaces: &workspaces,
+                persistence: persistence
+            )
         }
     }
 
@@ -194,6 +215,21 @@ extension WorkspaceManager {
         }
 
         return nil
+    }
+
+    /// Decodes the stored session payload for a managed runtime into persisted resume metadata.
+    private func parsedSessionIdentity(from event: AgentActivityEvent) -> (sessionId: String, transcriptPath: String?) {
+        switch event.agentType {
+        case .claudeCode:
+            let components = event.payload
+                .split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+                .map(String.init)
+            let sessionId = components.first ?? ""
+            let transcriptPath = components.count > 1 ? components[1] : nil
+            return (sessionId, transcriptPath)
+        case .codex:
+            return (event.payload, nil)
+        }
     }
 
     /// Rebuilds the next FIFO sequence cursor from persisted surface metadata.

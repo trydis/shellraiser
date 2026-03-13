@@ -23,6 +23,7 @@ final class AgentTypeAndWorkspaceModelTests: XCTestCase {
             title: "Initial",
             agentType: .codex,
             sessionId: "initial-session",
+            shouldResumeSession: true,
             terminalConfig: TerminalPanelConfig(
                 workingDirectory: "/tmp",
                 shell: "/bin/zsh",

@@ -146,6 +146,13 @@ extension WorkspaceManager {
         persistence.save(workspaces)
     }
 
+    /// Freezes resume invalidation so active agent sessions remain resumable across app shutdown.
+    func prepareForTermination() {
+        guard !isTerminating else { return }
+        isTerminating = true
+        save()
+    }
+
     /// Selects workspace by 1-based index in sidebar order.
     func selectWorkspace(atDisplayIndex index: Int) {
         guard index > 0, index <= workspaces.count else { return }

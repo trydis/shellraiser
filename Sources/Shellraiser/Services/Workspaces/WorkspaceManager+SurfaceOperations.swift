@@ -3,6 +3,17 @@ import Foundation
 
 /// Pane, surface, and Ghostty command flows for the shared manager.
 extension WorkspaceManager {
+    /// Handles a terminal child-process exit by closing the surface unless app shutdown is in progress.
+    func handleSurfaceChildExit(workspaceId: UUID, surfaceId: UUID) {
+        guard !isTerminating else { return }
+        guard let workspace = workspace(id: workspaceId),
+              let paneId = workspace.rootPane.paneId(containing: surfaceId) else {
+            return
+        }
+
+        closeSurface(workspaceId: workspaceId, paneId: paneId, surfaceId: surfaceId)
+    }
+
     /// Adds a surface to the target pane leaf.
     func addSurface(workspaceId: UUID, paneId: UUID, surface: SurfaceModel) {
         let appended = surfaceManager.addSurface(

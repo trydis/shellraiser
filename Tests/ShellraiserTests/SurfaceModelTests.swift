@@ -20,6 +20,8 @@ final class SurfaceModelTests: XCTestCase {
         XCTAssertEqual(decodedSurface.title, "Legacy Surface")
         XCTAssertEqual(decodedSurface.agentType, .claudeCode)
         XCTAssertEqual(decodedSurface.sessionId, "legacy-session")
+        XCTAssertEqual(decodedSurface.transcriptPath, "")
+        XCTAssertFalse(decodedSurface.shouldResumeSession)
         XCTAssertTrue(decodedSurface.hasUnreadIdleNotification)
         XCTAssertTrue(decodedSurface.hasPendingCompletion)
         XCTAssertFalse(decodedSurface.isIdle)

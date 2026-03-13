@@ -6,6 +6,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
     var title: String
     var agentType: AgentType
     var sessionId: String
+    var transcriptPath: String
+    var shouldResumeSession: Bool
     var terminalConfig: TerminalPanelConfig
     var isIdle: Bool
     var hasUnreadIdleNotification: Bool
@@ -19,6 +21,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         case title
         case agentType
         case sessionId
+        case transcriptPath
+        case shouldResumeSession
         case terminalConfig
         case isIdle
         case hasUnreadIdleNotification
@@ -34,6 +38,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         title: String,
         agentType: AgentType,
         sessionId: String,
+        transcriptPath: String = "",
+        shouldResumeSession: Bool = false,
         terminalConfig: TerminalPanelConfig,
         isIdle: Bool,
         hasUnreadIdleNotification: Bool,
@@ -46,6 +52,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         self.title = title
         self.agentType = agentType
         self.sessionId = sessionId
+        self.transcriptPath = transcriptPath
+        self.shouldResumeSession = shouldResumeSession
         self.terminalConfig = terminalConfig
         self.isIdle = isIdle
         self.hasUnreadIdleNotification = hasUnreadIdleNotification
@@ -62,6 +70,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         title = try container.decode(String.self, forKey: .title)
         agentType = try container.decodeIfPresent(AgentType.self, forKey: .agentType) ?? .claudeCode
         sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId) ?? ""
+        transcriptPath = try container.decodeIfPresent(String.self, forKey: .transcriptPath) ?? ""
+        shouldResumeSession = try container.decodeIfPresent(Bool.self, forKey: .shouldResumeSession) ?? false
         terminalConfig = try container.decodeIfPresent(TerminalPanelConfig.self, forKey: .terminalConfig) ?? .default()
         isIdle = try container.decodeIfPresent(Bool.self, forKey: .isIdle) ?? false
         hasUnreadIdleNotification = try container.decodeIfPresent(Bool.self, forKey: .hasUnreadIdleNotification) ?? false
@@ -79,6 +89,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
         try container.encode(title, forKey: .title)
         try container.encode(agentType, forKey: .agentType)
         try container.encode(sessionId, forKey: .sessionId)
+        try container.encode(transcriptPath, forKey: .transcriptPath)
+        try container.encode(shouldResumeSession, forKey: .shouldResumeSession)
         try container.encode(terminalConfig, forKey: .terminalConfig)
         try container.encode(isIdle, forKey: .isIdle)
         try container.encode(hasUnreadIdleNotification, forKey: .hasUnreadIdleNotification)
@@ -95,6 +107,8 @@ struct SurfaceModel: Identifiable, Codable, Equatable {
             title: "~",
             agentType: agentType,
             sessionId: "",
+            transcriptPath: "",
+            shouldResumeSession: false,
             terminalConfig: .default(),
             isIdle: false,
             hasUnreadIdleNotification: false,

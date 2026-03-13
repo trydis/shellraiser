@@ -30,6 +30,17 @@ final class ShellraiserScriptingController {
         self.workspaceManager = workspaceManager
     }
 
+    /// Resets retained singleton state so tests do not leak scripting context across cases.
+    func resetForTesting() {
+        workspaceManager = nil
+        surfaceConfigurationsByID.removeAll()
+    }
+
+    /// Forwards app-termination preparation to the installed workspace manager.
+    func prepareForTermination() {
+        workspaceManager?.prepareForTermination()
+    }
+
     /// Returns scriptable terminal objects for every open terminal surface.
     func terminals() -> [ScriptableTerminal] {
         terminalSnapshots().map(ScriptableTerminal.init(snapshot:))
