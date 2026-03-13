@@ -100,9 +100,13 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         )
 
         let command = GhosttyRuntime.launchCommand(for: surface, terminalConfig: surface.terminalConfig)
-        XCTAssertTrue(command.contains("claude"))
-        XCTAssertTrue(command.contains("--resume"))
+        let claudeRange = command.range(of: "claude")
+        let resumeRange = command.range(of: "--resume")
+        XCTAssertNotNil(claudeRange)
+        XCTAssertNotNil(resumeRange)
+        XCTAssertLessThan(claudeRange?.lowerBound ?? command.endIndex, resumeRange?.lowerBound ?? command.startIndex)
         XCTAssertTrue(command.contains("da38c283-06c0-4d30-aada-c9552606d76a"))
+        XCTAssertFalse(command.contains("/bin/zsh"))
     }
 
     /// Verifies Claude falls back to a shell launch when no persisted transcript exists to resume.
