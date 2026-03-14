@@ -8,9 +8,11 @@ source "$script_dir/workspace-shellraiser-common.sh"
 
 main() {
     local invocation_repo_root main_repo_root workspace_name branch_name expected_worktree_path
+    local current_working_directory
     local registered_worktree_path registered_branch shellraiser_status worktree_status branch_status
     local worktree_force_mode branch_force_mode
 
+    current_working_directory="$(pwd -P)"
     invocation_repo_root="$(resolve_repo_root)"
     main_repo_root="$(resolve_main_repo_root)"
     workspace_name="$(resolve_workspace_name "$@")"
@@ -31,8 +33,12 @@ main() {
         fail_with_message "Branch '$branch_name' exists but is not checked out at '$expected_worktree_path'."
     fi
 
-    if [[ "$expected_worktree_path" == "$main_repo_root" || "$expected_worktree_path" == "$invocation_repo_root" && "$invocation_repo_root" == "$main_repo_root" ]]; then
+    if [[ "$expected_worktree_path" == "$main_repo_root" ]]; then
         fail_with_message "Refusing to delete the primary repository worktree '$main_repo_root'."
+    fi
+
+    if [[ "$invocation_repo_root" == "$expected_worktree_path" || "$current_working_directory" == "$expected_worktree_path" ]]; then
+        fail_with_message "Refusing to delete the currently invoked worktree '$expected_worktree_path'."
     fi
 
     worktree_force_mode="prompt"
