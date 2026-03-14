@@ -167,7 +167,7 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         XCTAssertTrue(ShellraiserScriptingController.shared.delete(workspace: targetWorkspace))
         XCTAssertEqual(manager.workspaces.map(\.id), [fallback.id])
         XCTAssertEqual(manager.window.selectedWorkspaceId, fallback.id)
-        XCTAssertNil(manager.pendingWorkspaceDeletion)
+        XCTAssertNil(ShellraiserScriptingController.shared.workspace(workspaceId: target.id))
     }
 
     /// Verifies scripted splits inherit the source surface cwd when no explicit cwd configuration is provided.
