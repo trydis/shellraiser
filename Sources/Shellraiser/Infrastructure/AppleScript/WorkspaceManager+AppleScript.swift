@@ -128,6 +128,7 @@ extension WorkspaceManager {
         )
 
         guard let createdSurfaceId else { return nil }
+        applyControlEnvironment(workspaceId: target.workspaceId, surfaceId: createdSurfaceId)
 
         guard let createdContext = surfaceContext(for: createdSurfaceId),
               let snapshot = scriptableTerminalSnapshots().first(where: { $0.surfaceId == createdSurfaceId }) else {
@@ -153,6 +154,33 @@ extension WorkspaceManager {
         }
 
         return nil
+    }
+
+    /// Closes a specific script-targeted surface, deleting its workspace when it is the last surface.
+    func closeScriptSurface(surfaceId: UUID) -> Bool {
+        guard let target = surfaceContext(for: surfaceId),
+              let workspace = workspace(id: target.workspaceId) else {
+            return false
+        }
+
+        if workspace.rootPane.allSurfaceIds().count <= 1 {
+            deleteWorkspace(id: target.workspaceId)
+            return true
+        }
+
+        closeSurface(
+            workspaceId: target.workspaceId,
+            paneId: target.paneId,
+            surfaceId: target.surfaceId
+        )
+        return true
+    }
+
+    /// Closes a scripted workspace through the standard workspace lifecycle.
+    func closeScriptWorkspace(workspaceId: UUID) -> Bool {
+        guard workspace(id: workspaceId) != nil else { return false }
+        deleteWorkspace(id: workspaceId)
+        return true
     }
 }
 

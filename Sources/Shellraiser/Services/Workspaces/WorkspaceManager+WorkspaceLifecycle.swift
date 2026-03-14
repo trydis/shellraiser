@@ -16,6 +16,9 @@ extension WorkspaceManager {
             window: &window,
             persistence: persistence
         )
+        if let selectedWorkspace {
+            applyControlEnvironment(for: selectedWorkspace)
+        }
         synchronizePendingCompletionCursor()
         refreshFocusedWorkspaceGitBranches()
         hasLoadedPersistedWorkspaces = true
@@ -32,13 +35,15 @@ extension WorkspaceManager {
         name: String = "New Workspace",
         initialSurface: SurfaceModel = SurfaceModel.makeDefault()
     ) -> WorkspaceModel {
-        workspaceCatalog.createWorkspace(
+        let workspace = workspaceCatalog.createWorkspace(
             name: name,
             initialSurface: initialSurface,
             workspaces: &workspaces,
             window: &window,
             persistence: persistence
         )
+        applyControlEnvironment(for: workspace)
+        return workspace
     }
 
     /// Renames an existing workspace.
@@ -66,6 +71,9 @@ extension WorkspaceManager {
             completionNotifications.removeNotifications(for: $0)
             GhosttyRuntime.shared.releaseSurface(surfaceId: $0)
             clearGitBranch(surfaceId: $0)
+        }
+        if let selectedWorkspace {
+            applyControlEnvironment(for: selectedWorkspace)
         }
     }
 
@@ -173,5 +181,97 @@ extension WorkspaceManager {
     /// Returns the number of live terminal child processes currently mounted in a workspace.
     private func activeProcessCount(in workspace: WorkspaceModel) -> Int {
         workspace.rootPane.allSurfaceIds().count
+    }
+}
+
+/// Injects stable control-environment variables for Shellraiser-managed terminal surfaces.
+extension WorkspaceManager {
+    /// Applies `FUX_*` environment variables to the active surface in a newly created workspace.
+    func applyControlEnvironment(for workspace: WorkspaceModel) {
+        guard let surfaceId = workspace.rootPane.firstActiveSurfaceId(),
+              let paneId = workspace.rootPane.paneId(containing: surfaceId) else {
+            return
+        }
+
+        applyControlEnvironment(workspaceId: workspace.id, paneId: paneId, surfaceId: surfaceId)
+    }
+
+    /// Applies `FUX_*` environment variables to one surface by resolving its current pane.
+    func applyControlEnvironment(workspaceId: UUID, surfaceId: UUID) {
+        guard let workspace = workspace(id: workspaceId),
+              let paneId = workspace.rootPane.paneId(containing: surfaceId) else {
+            return
+        }
+
+        applyControlEnvironment(workspaceId: workspaceId, paneId: paneId, surfaceId: surfaceId)
+    }
+
+    /// Applies `FUX_*` environment variables to one surface in a known workspace/pane context.
+    func applyControlEnvironment(workspaceId: UUID, paneId: UUID, surfaceId: UUID) {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceId }) else {
+            return
+        }
+
+        let environment = controlEnvironment(
+            workspaceId: workspaceId,
+            paneId: paneId,
+            surfaceId: surfaceId
+        )
+        let didUpdate = workspaces[workspaceIndex].rootPane.updateEnvironment(
+            for: surfaceId,
+            environment: environment
+        )
+
+        if didUpdate {
+            persistence.save(workspaces)
+        }
+    }
+
+    /// Returns the stable `FUX_*` environment block for one surface context.
+    func controlEnvironment(
+        workspaceId: UUID,
+        paneId: UUID,
+        surfaceId: UUID
+    ) -> [String: String] {
+        [
+            "FUX_CONTROL_MODE": "native",
+            "FUX_WORKSPACE_ID": workspaceId.uuidString.lowercased(),
+            "FUX_PANE_ID": paneId.uuidString.lowercased(),
+            "FUX_SURFACE_ID": surfaceId.uuidString.lowercased()
+        ]
+    }
+}
+
+/// Pane-tree environment mutation helpers used by Shellraiser control-tagging flows.
+private extension PaneNodeModel {
+    /// Updates one surface environment dictionary in place.
+    mutating func updateEnvironment(
+        for surfaceId: UUID,
+        environment: [String: String]
+    ) -> Bool {
+        switch self {
+        case .leaf(var leaf):
+            guard let index = leaf.surfaces.firstIndex(where: { $0.id == surfaceId }) else {
+                return false
+            }
+
+            for (key, value) in environment {
+                leaf.surfaces[index].terminalConfig.environment[key] = value
+            }
+            self = .leaf(leaf)
+            return true
+        case .split(var split):
+            if split.first.updateEnvironment(for: surfaceId, environment: environment) {
+                self = .split(split)
+                return true
+            }
+
+            if split.second.updateEnvironment(for: surfaceId, environment: environment) {
+                self = .split(split)
+                return true
+            }
+
+            return false
+        }
     }
 }

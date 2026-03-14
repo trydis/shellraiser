@@ -161,5 +161,23 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         XCTAssertTrue(command.contains("/bin/zsh"))
         XCTAssertFalse(command.contains("resume"))
     }
+
+    /// Verifies named-key mapping supports generic control-letter combinations.
+    func testScriptKeyMappingSupportsGenericControlLetters() {
+        let mapping = GhosttyRuntime.scriptKeyMapping(for: "ctrl+x")
+
+        XCTAssertEqual(mapping?.keyCode, 7)
+        XCTAssertEqual(mapping?.characters, "x")
+        XCTAssertEqual(mapping?.modifiers, [.control])
+    }
+
+    /// Verifies named-key mapping preserves explicit control-key aliases used by automation.
+    func testScriptKeyMappingSupportsExplicitControlAliases() {
+        let mapping = GhosttyRuntime.scriptKeyMapping(for: "ctrl-d")
+
+        XCTAssertEqual(mapping?.keyCode, 2)
+        XCTAssertEqual(mapping?.characters, "d")
+        XCTAssertEqual(mapping?.modifiers, [.control])
+    }
 }
 #endif

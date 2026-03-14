@@ -87,6 +87,20 @@ final class ShellraiserScriptingController {
         return manager.focusScriptSurface(surfaceId: terminal.surfaceId)
     }
 
+    /// Closes the target terminal surface through the installed workspace manager.
+    @discardableResult
+    func close(terminal: ScriptableTerminal) -> Bool {
+        guard let manager = workspaceManager else { return false }
+        return manager.closeScriptSurface(surfaceId: terminal.surfaceId)
+    }
+
+    /// Closes the target workspace through the installed workspace manager.
+    @discardableResult
+    func close(workspace: ScriptableWorkspace) -> Bool {
+        guard let manager = workspaceManager else { return false }
+        return manager.closeScriptWorkspace(workspaceId: workspace.workspaceId)
+    }
+
     /// Sends literal text to the target terminal surface.
     @discardableResult
     func input(text: String, to terminal: ScriptableTerminal) -> Bool {

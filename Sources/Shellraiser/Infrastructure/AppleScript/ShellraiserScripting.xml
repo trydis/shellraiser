@@ -75,6 +75,9 @@
             <element type="tab" access="r">
                 <cocoa key="tabs"/>
             </element>
+            <responds-to command="close">
+                <cocoa method="handleCloseScriptCommand:"/>
+            </responds-to>
             <property name="name" code="pnam" type="text" access="r" description="Visible workspace name."/>
             <property name="id" code="ID  " type="text" access="r" description="Stable workspace identifier."/>
             <property name="selected tab" code="ShSt" type="tab" access="r" description="The currently selected tab.">
@@ -100,6 +103,9 @@
             </responds-to>
             <responds-to command="focus">
                 <cocoa method="handleFocusScriptCommand:"/>
+            </responds-to>
+            <responds-to command="close">
+                <cocoa method="handleCloseScriptCommand:"/>
             </responds-to>
             <property name="id" code="ID  " type="text" access="r" description="Stable surface identifier."/>
             <property name="name" code="pnam" type="text" access="r" description="Visible terminal name."/>

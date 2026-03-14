@@ -24,6 +24,11 @@ extension WorkspaceManager {
             persistence: persistence
         )
         if appended {
+            applyControlEnvironment(
+                workspaceId: workspaceId,
+                paneId: paneId,
+                surfaceId: surface.id
+            )
             GhosttyRuntime.shared.focusSurfaceHost(surfaceId: surface.id)
         }
     }
@@ -106,6 +111,7 @@ extension WorkspaceManager {
             workspaces: &workspaces,
             persistence: persistence
         ) {
+            applyControlEnvironment(workspaceId: workspaceId, surfaceId: surfaceId)
             GhosttyRuntime.shared.focusSurfaceHost(surfaceId: surfaceId)
         }
     }

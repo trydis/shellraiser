@@ -90,6 +90,11 @@ final class ScriptableWorkspace: NSObject {
         snapshot.id
     }
 
+    /// Underlying workspace identifier used for close routing.
+    var workspaceId: UUID {
+        snapshot.workspaceId
+    }
+
     /// Selected tab for the workspace.
     @objc dynamic var selectedTab: ScriptableTab? {
         withMainActorValue {
@@ -129,6 +134,19 @@ final class ScriptableWorkspace: NSObject {
                 uniqueID: id
             )
         }
+    }
+
+    /// Handles the standard AppleScript `close` command for a workspace.
+    @objc(handleCloseScriptCommand:)
+    @MainActor
+    func handleCloseScriptCommand(_ command: NSScriptCommand) -> Any? {
+        guard ShellraiserScriptingController.shared.close(workspace: self) else {
+            command.scriptErrorNumber = NSReceiverEvaluationScriptError
+            command.scriptErrorString = "Shellraiser could not close the requested workspace."
+            return nil
+        }
+
+        return nil
     }
 }
 
@@ -319,5 +337,18 @@ final class ScriptableTerminal: NSObject {
         }
 
         return created
+    }
+
+    /// Handles the standard AppleScript `close` command for a terminal surface.
+    @objc(handleCloseScriptCommand:)
+    @MainActor
+    func handleCloseScriptCommand(_ command: NSScriptCommand) -> Any? {
+        guard ShellraiserScriptingController.shared.close(terminal: self) else {
+            command.scriptErrorNumber = NSReceiverEvaluationScriptError
+            command.scriptErrorString = "Shellraiser could not close the requested terminal."
+            return nil
+        }
+
+        return nil
     }
 }

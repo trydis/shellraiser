@@ -96,6 +96,13 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         }
 
         XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/project")
+        XCTAssertEqual(createdSurface.terminalConfig.environment["FUX_CONTROL_MODE"], "native")
+        XCTAssertEqual(createdSurface.terminalConfig.environment["FUX_WORKSPACE_ID"], workspace.id)
+        XCTAssertEqual(createdSurface.terminalConfig.environment["FUX_SURFACE_ID"], terminal.id)
+        XCTAssertEqual(
+            createdSurface.terminalConfig.environment["FUX_PANE_ID"],
+            manager.workspaces[0].rootPane.paneId(containing: surfaceId)?.uuidString.lowercased()
+        )
     }
 
     /// Verifies scripted splits inherit the source surface cwd when no explicit cwd configuration is provided.
@@ -133,6 +140,90 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         }
 
         XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/script-project")
+        XCTAssertEqual(
+            createdSurface.terminalConfig.environment["FUX_WORKSPACE_ID"],
+            workspaceId.uuidString.lowercased()
+        )
+        XCTAssertEqual(
+            createdSurface.terminalConfig.environment["FUX_SURFACE_ID"],
+            createdSurfaceId.uuidString.lowercased()
+        )
+        XCTAssertEqual(
+            createdSurface.terminalConfig.environment["FUX_PANE_ID"],
+            manager.workspaces[0].rootPane.paneId(containing: createdSurfaceId)?.uuidString.lowercased()
+        )
+    }
+
+    /// Verifies closing a scripted terminal removes only that surface when siblings remain.
+    func testCloseTerminalRemovesOnlyTargetSurface() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Close Terminal",
+            configuration: nil
+        ), let sourceTerminal = workspace.selectedTab?.terminals.first,
+              let splitTerminal = ShellraiserScriptingController.shared.split(
+                terminal: sourceTerminal,
+                direction: "right",
+                configuration: nil
+              ) else {
+            return XCTFail("Expected scripted setup to create two terminals.")
+        }
+
+        XCTAssertTrue(ShellraiserScriptingController.shared.close(terminal: splitTerminal))
+        XCTAssertEqual(manager.workspaces.count, 1)
+        XCTAssertNil(
+            manager.scriptableTerminalSnapshots().first(where: {
+                $0.surfaceId == UUID(uuidString: splitTerminal.id)
+            })
+        )
+    }
+
+    /// Verifies closing the final scripted terminal also removes its workspace.
+    func testCloseTerminalDeletesWorkspaceWhenItIsLastSurface() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Last Surface",
+            configuration: nil
+        ), let terminal = workspace.selectedTab?.terminals.first else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        XCTAssertTrue(ShellraiserScriptingController.shared.close(terminal: terminal))
+        XCTAssertEqual(manager.workspaces.count, 1)
+        XCTAssertEqual(manager.workspaces[0].name, "Workspace")
+        XCTAssertEqual(
+            manager.workspaces[0].rootPane.firstActiveSurfaceId()
+                .flatMap { surface(in: manager.workspaces[0].rootPane, surfaceId: $0) }?
+                .terminalConfig.environment["FUX_CONTROL_MODE"],
+            "native"
+        )
+    }
+
+    /// Verifies closing a scripted workspace removes the entire workspace entry.
+    func testCloseWorkspaceDeletesRequestedWorkspace() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        guard let firstWorkspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Keep",
+            configuration: nil
+        ), let secondWorkspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Close",
+            configuration: nil
+        ) else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        XCTAssertTrue(ShellraiserScriptingController.shared.close(workspace: secondWorkspace))
+        XCTAssertEqual(manager.workspaces.map(\.name), ["Keep"])
+        XCTAssertNotNil(manager.workspaces.first(where: { $0.id.uuidString.lowercased() == firstWorkspace.id }))
     }
 
     /// Verifies unique-id terminal resolution survives later pane mutations that reorder terminal snapshots.

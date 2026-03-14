@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 #if canImport(GhosttyKit)
 import GhosttyKit
@@ -72,6 +73,13 @@ final class GhosttyRuntime {
         let backgroundOpacityCells: Bool
         let backgroundBlurRadius: Int
         let splitDividerColor: NSColor
+    }
+
+    /// Named-key mapping used by AppleScript and control-layer input injection.
+    struct ScriptKeyMapping: Equatable {
+        let keyCode: UInt16
+        let characters: String
+        let modifiers: NSEvent.ModifierFlags
     }
 
     static let shared = GhosttyRuntime()
@@ -373,11 +381,11 @@ final class GhosttyRuntime {
     /// Sends a named control key directly to a surface via Ghostty's key-event path.
     @discardableResult
     func sendNamedKey(surfaceId: UUID, keyName: String) -> Bool {
-        guard let mapping = scriptKeyMapping(for: keyName) else { return false }
+        guard let mapping = Self.scriptKeyMapping(for: keyName) else { return false }
         guard let keyDown = NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
-            modifierFlags: [],
+            modifierFlags: mapping.modifiers,
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: 0,
             context: nil,
@@ -392,7 +400,7 @@ final class GhosttyRuntime {
         guard let keyUp = NSEvent.keyEvent(
             with: .keyUp,
             location: .zero,
-            modifierFlags: [],
+            modifierFlags: mapping.modifiers,
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: 0,
             context: nil,
@@ -530,18 +538,90 @@ final class GhosttyRuntime {
     }
 
     /// Maps AppleScript key names onto AppKit key event payloads.
-    private func scriptKeyMapping(for keyName: String) -> (keyCode: UInt16, characters: String)? {
-        switch keyName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    static func scriptKeyMapping(for keyName: String) -> ScriptKeyMapping? {
+        let normalized = keyName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        switch normalized {
         case "enter", "return":
-            return (36, "\r")
+            return ScriptKeyMapping(keyCode: 36, characters: "\r", modifiers: [])
         case "tab":
-            return (48, "\t")
+            return ScriptKeyMapping(keyCode: 48, characters: "\t", modifiers: [])
         case "escape", "esc":
-            return (53, "\u{1B}")
+            return ScriptKeyMapping(keyCode: 53, characters: "\u{1B}", modifiers: [])
         case "backspace", "delete":
-            return (51, "\u{7F}")
+            return ScriptKeyMapping(keyCode: 51, characters: "\u{7F}", modifiers: [])
+        case "ctrl-c", "ctrl+c":
+            return ScriptKeyMapping(
+                keyCode: UInt16(kVK_ANSI_C),
+                characters: "c",
+                modifiers: [.control]
+            )
+        case "ctrl-d", "ctrl+d":
+            return ScriptKeyMapping(
+                keyCode: UInt16(kVK_ANSI_D),
+                characters: "d",
+                modifiers: [.control]
+            )
         default:
-            return nil
+            guard let controlLetter = controlLetter(normalized),
+                  let keyCode = keyCode(forControlLetter: controlLetter) else {
+                return nil
+            }
+
+            return ScriptKeyMapping(
+                keyCode: keyCode,
+                characters: String(controlLetter),
+                modifiers: [.control]
+            )
+        }
+    }
+
+    /// Extracts the terminal letter from a `ctrl-<letter>` or `ctrl+<letter>` binding.
+    private static func controlLetter(_ keyName: String) -> Character? {
+        for prefix in ["ctrl-", "ctrl+"] where keyName.hasPrefix(prefix) {
+            let suffix = keyName.dropFirst(prefix.count)
+            guard suffix.count == 1,
+                  let scalar = suffix.unicodeScalars.first,
+                  CharacterSet.letters.contains(scalar) else {
+                return nil
+            }
+
+            return Character(String(scalar).lowercased())
+        }
+
+        return nil
+    }
+
+    /// Returns the ANSI keycode used to synthesize one control-letter key binding.
+    private static func keyCode(forControlLetter letter: Character) -> UInt16? {
+        switch letter {
+        case "a": return UInt16(kVK_ANSI_A)
+        case "b": return UInt16(kVK_ANSI_B)
+        case "c": return UInt16(kVK_ANSI_C)
+        case "d": return UInt16(kVK_ANSI_D)
+        case "e": return UInt16(kVK_ANSI_E)
+        case "f": return UInt16(kVK_ANSI_F)
+        case "g": return UInt16(kVK_ANSI_G)
+        case "h": return UInt16(kVK_ANSI_H)
+        case "i": return UInt16(kVK_ANSI_I)
+        case "j": return UInt16(kVK_ANSI_J)
+        case "k": return UInt16(kVK_ANSI_K)
+        case "l": return UInt16(kVK_ANSI_L)
+        case "m": return UInt16(kVK_ANSI_M)
+        case "n": return UInt16(kVK_ANSI_N)
+        case "o": return UInt16(kVK_ANSI_O)
+        case "p": return UInt16(kVK_ANSI_P)
+        case "q": return UInt16(kVK_ANSI_Q)
+        case "r": return UInt16(kVK_ANSI_R)
+        case "s": return UInt16(kVK_ANSI_S)
+        case "t": return UInt16(kVK_ANSI_T)
+        case "u": return UInt16(kVK_ANSI_U)
+        case "v": return UInt16(kVK_ANSI_V)
+        case "w": return UInt16(kVK_ANSI_W)
+        case "x": return UInt16(kVK_ANSI_X)
+        case "y": return UInt16(kVK_ANSI_Y)
+        case "z": return UInt16(kVK_ANSI_Z)
+        default: return nil
         }
     }
 
@@ -1072,6 +1152,8 @@ final class GhosttyRuntime {
         var env = terminalConfig.environment
         env["SHELL"] = terminalConfig.shell
         env["TERM"] = env["TERM"] ?? "xterm-256color"
+        env["FUX_CONTROL_MODE"] = env["FUX_CONTROL_MODE"] ?? "native"
+        env["FUX_SURFACE_ID"] = surfaceId.uuidString.lowercased()
         return AgentRuntimeBridge.shared.environment(
             for: surfaceId,
             shellPath: terminalConfig.shell,

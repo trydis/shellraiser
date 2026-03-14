@@ -35,7 +35,14 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         )
 
         manager.loadWorkspaces()
-        XCTAssertEqual(manager.workspaces, [persistedWorkspace])
+        XCTAssertEqual(manager.workspaces.count, 1)
+        XCTAssertEqual(manager.workspaces[0].id, persistedWorkspace.id)
+        XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, pendingSurface.id)
+        XCTAssertEqual(
+            surface(in: manager.workspaces[0].rootPane, surfaceId: pendingSurface.id)?
+                .terminalConfig.environment["FUX_CONTROL_MODE"],
+            "native"
+        )
         XCTAssertEqual(manager.nextPendingCompletionSequence, 10)
         XCTAssertEqual(runtimeBridge.prepareRuntimeSupportCallCount, 1)
 
