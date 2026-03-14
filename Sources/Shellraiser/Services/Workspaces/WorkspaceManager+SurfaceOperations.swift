@@ -574,22 +574,20 @@ extension WorkspaceManager {
     ) -> String? {
         guard let workspace = workspace(id: workspaceId) else { return nil }
 
-        let candidateSurfaceIds = [
-            sourceSurfaceId,
-            workspace.rootPane.activeSurfaceId(in: paneId)
-        ]
-            .compactMap { $0 }
-
-        for candidateSurfaceId in candidateSurfaceIds {
-            guard let surface = surface(in: workspace.rootPane, surfaceId: candidateSurfaceId),
-                  let workingDirectory = normalizedWorkingDirectory(surface.terminalConfig.workingDirectory) else {
-                continue
+        if let sourceSurfaceId {
+            guard let surface = surface(in: workspace.rootPane, surfaceId: sourceSurfaceId) else {
+                return nil
             }
 
-            return workingDirectory
+            return normalizedWorkingDirectory(surface.terminalConfig.workingDirectory)
         }
 
-        return nil
+        guard let activeSurfaceId = workspace.rootPane.activeSurfaceId(in: paneId),
+              let surface = surface(in: workspace.rootPane, surfaceId: activeSurfaceId) else {
+            return nil
+        }
+
+        return normalizedWorkingDirectory(surface.terminalConfig.workingDirectory)
     }
 
     /// Trims a cwd string and returns `nil` when it carries no usable path.
