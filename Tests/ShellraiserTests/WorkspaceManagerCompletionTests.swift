@@ -229,6 +229,39 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
+    /// Verifies Codex started events are ignored so launch does not mark a workspace busy.
+    func testCodexStartedEventDoesNotMarkWorkspaceBusy() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001170")!,
+            title: "Codex Launch Surface",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001171")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001172")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Codex Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_521),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .started,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
     /// Verifies session-identity events persist the resolved runtime and resume identifier.
     func testSessionEventPersistsSurfaceSessionIdentity() {
         let eventMonitor = MockAgentActivityEventMonitor()
@@ -411,8 +444,8 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertEqual(persistence.load(), manager.workspaces)
     }
 
-    /// Verifies Codex terminal input marks the owning workspace busy until completion is observed.
-    func testNoteSurfaceActivityMarksCodexWorkspaceBusy() {
+    /// Verifies submit-only Codex input does not mark busy before runtime session discovery.
+    func testHandleSurfaceInputDoesNotMarkCodexBusyWithoutKnownSession() {
         let manager = makeWorkspaceManager()
         let surface = makeSurface(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000001137")!,
@@ -430,9 +463,139 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
             )
         ]
 
-        manager.noteSurfaceActivity(workspaceId: workspaceId, surfaceId: surface.id)
+        manager.handleSurfaceInput(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            input: .userSubmit
+        )
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
+    /// Verifies Codex submit input marks the workspace busy once runtime session identity is known.
+    func testHandleSurfaceInputMarksCodexBusyAfterSessionEvent() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001161")!,
+            title: "Codex Submit Surface",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001162")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001163")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Codex Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_540),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .session,
+                payload: "session-123"
+            )
+        )
+
+        manager.handleSurfaceInput(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            input: .userSubmit
+        )
 
         XCTAssertTrue(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
+    /// Verifies non-submit Codex input does not mark the workspace busy after session discovery.
+    func testHandleSurfaceInputIgnoresNonSubmitCodexInput() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001164")!,
+            title: "Codex Typing Surface",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001165")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001166")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Codex Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_541),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .session,
+                payload: "session-456"
+            )
+        )
+
+        manager.handleSurfaceInput(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            input: .userInput
+        )
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+    }
+
+    /// Verifies runtime exit clears the Codex submit gate after a session was known.
+    func testExitedEventClearsKnownCodexSessionGate() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001167")!,
+            title: "Codex Exit Surface",
+            agentType: .codex
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001168")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001169")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Codex Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_542),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .session,
+                payload: "session-789"
+            )
+        )
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_004_543),
+                agentType: .codex,
+                surfaceId: surface.id,
+                phase: .exited,
+                payload: ""
+            )
+        )
+
+        manager.handleSurfaceInput(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            input: .scriptedSubmit
+        )
+
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
     /// Verifies closing a busy surface clears the workspace working indicator state.

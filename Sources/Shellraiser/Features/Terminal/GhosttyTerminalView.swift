@@ -13,7 +13,7 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
         terminalConfig: TerminalPanelConfig,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -74,7 +74,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
     let isFocused: Bool
     let onActivate: () -> Void
     let onIdleNotification: () -> Void
-    let onUserInput: () -> Void
+    let onInput: (SurfaceInputEvent) -> Void
     let onTitleChange: (String) -> Void
     let onWorkingDirectoryChange: (String) -> Void
     let onChildExited: () -> Void
@@ -89,7 +89,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             terminalConfig: config,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
@@ -104,7 +104,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             isFocused: isFocused,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
@@ -127,7 +127,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             terminalConfig: config,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
@@ -142,7 +142,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             isFocused: isFocused,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
@@ -169,7 +169,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         isFocused: Bool,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -191,7 +191,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             isFocused: isFocused,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
@@ -218,7 +218,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         isFocused: Bool,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -229,7 +229,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             terminalConfig: config,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
-            onUserInput: onUserInput,
+            onInput: onInput,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,

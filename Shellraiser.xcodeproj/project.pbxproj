@@ -56,6 +56,7 @@
 		A1000049 /* ShellraiserScripting.xml in Resources */ = {isa = PBXBuildFile; fileRef = A2000049; };
 		A1000050 /* GitBranchResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050; };
 		A1000051 /* WorkspaceManager+GitBranches.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000051; };
+		A1000052 /* SurfaceInputEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000052; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -108,6 +109,7 @@
 		A2000049 /* ShellraiserScripting.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Infrastructure/AppleScript/ShellraiserScripting.xml; sourceTree = "<group>"; };
 		A2000050 /* GitBranchResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Git/GitBranchResolver.swift; sourceTree = "<group>"; };
 		A2000051 /* WorkspaceManager+GitBranches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/Workspaces/WorkspaceManager+GitBranches.swift"; sourceTree = "<group>"; };
+		A2000052 /* SurfaceInputEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceInputEvent.swift; sourceTree = "<group>"; };
 		A3000001 /* Shellraiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shellraiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -144,6 +146,7 @@
 				A2000017 /* AgentType.swift */,
 				A2000018 /* TerminalPanelConfig.swift */,
 				A2000019 /* SurfaceModel.swift */,
+				A2000052 /* SurfaceInputEvent.swift */,
 				A2000020 /* PaneNodeModel.swift */,
 				A2000041 /* PaneNodeModel+Operations.swift */,
 				A2000021 /* WorkspaceModel.swift */,
@@ -281,6 +284,7 @@
 				A1000017 /* AgentType.swift in Sources */,
 				A1000018 /* TerminalPanelConfig.swift in Sources */,
 				A1000019 /* SurfaceModel.swift in Sources */,
+				A1000052 /* SurfaceInputEvent.swift in Sources */,
 				A1000020 /* PaneNodeModel.swift in Sources */,
 				A1000041 /* PaneNodeModel+Operations.swift in Sources */,
 				A1000021 /* WorkspaceModel.swift in Sources */,

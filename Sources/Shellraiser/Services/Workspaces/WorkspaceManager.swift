@@ -74,6 +74,7 @@ final class WorkspaceManager: ObservableObject {
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
     @Published var busySurfaceIds: Set<UUID> = []
+    var liveCodexSessionSurfaceIds: Set<UUID> = []
 
     let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager

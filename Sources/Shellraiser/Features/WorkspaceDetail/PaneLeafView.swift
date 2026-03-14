@@ -203,8 +203,12 @@ struct PaneLeafView: View {
                             // Agent completion notifications are driven by managed
                             // Claude/Codex hooks so queue timing matches actual turns.
                         },
-                        onUserInput: {
-                            manager.noteSurfaceActivity(workspaceId: workspaceId, surfaceId: activeSurface.id)
+                        onInput: { input in
+                            manager.handleSurfaceInput(
+                                workspaceId: workspaceId,
+                                surfaceId: activeSurface.id,
+                                input: input
+                            )
                         },
                         onTitleChange: { title in
                             manager.setSurfaceTitle(workspaceId: workspaceId, surfaceId: activeSurface.id, title: title)
