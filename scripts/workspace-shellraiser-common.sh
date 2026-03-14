@@ -443,8 +443,10 @@ run_shellraiser_workspace_with_commands() {
     local workspace_name="$2"
     local left_command="$3"
     local right_command="$4"
+    local automation_result
 
-    if ! osascript - "$workspace_root" "$workspace_name" "$left_command" "$right_command" <<'APPLESCRIPT'
+    if ! automation_result="$(
+        osascript - "$workspace_root" "$workspace_name" "$left_command" "$right_command" 2>&1 <<'APPLESCRIPT'
 on run argv
     set workspaceRoot to item 1 of argv
     set workspaceName to item 2 of argv
@@ -454,6 +456,17 @@ on run argv
     tell application "Shellraiser"
         set config to new surface configuration
         set initial working directory of config to workspaceRoot
+
+        set matchingWorkspaces to every workspace whose root working directory is workspaceRoot
+        set matchCount to count of matchingWorkspaces
+
+        if matchCount > 1 then
+            error "Multiple Shellraiser workspaces match " & workspaceRoot
+        end if
+
+        if matchCount = 1 then
+            error "A Shellraiser workspace already exists for " & workspaceRoot
+        end if
 
         set ws to new workspace named workspaceName with configuration config
         set leftTerminal to first terminal of selected tab of ws
@@ -467,7 +480,7 @@ on run argv
     end tell
 end run
 APPLESCRIPT
-    then
-        fail_with_message "Shellraiser automation failed. Ensure Shellraiser is installed and supports scripting."
+    )"; then
+        fail_with_message "${automation_result:-Shellraiser automation failed. Ensure Shellraiser is installed and supports scripting.}"
     fi
 }
