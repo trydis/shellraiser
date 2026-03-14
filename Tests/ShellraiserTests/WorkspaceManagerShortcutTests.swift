@@ -76,9 +76,13 @@ final class WorkspaceManagerShortcutTests: WorkspaceTestCase {
         XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, firstSurface.id)
     }
 
-    /// Verifies destructive and queue-navigation shortcuts route to delete-request and completion focus flows.
+    /// Verifies destructive and queue-navigation shortcuts route to delete confirmation and completion focus flows.
     func testHandleLocalShortcutRoutesDeleteAndNextCompletionCommands() {
-        let manager = makeWorkspaceManager()
+        var deleteConfirmationRequest: WorkspaceDeletionRequest?
+        let manager = makeWorkspaceManager(confirmWorkspaceDeletion: { request in
+            deleteConfirmationRequest = request
+            return false
+        })
         let firstWorkspace = WorkspaceModel.makeDefault(name: "First")
         let pendingSurface = makeSurface(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000001511")!,
@@ -107,7 +111,8 @@ final class WorkspaceManagerShortcutTests: WorkspaceTestCase {
         )
 
         XCTAssertTrue(didRequestDelete)
-        XCTAssertEqual(manager.pendingWorkspaceDeletion?.workspaceId, firstWorkspace.id)
+        XCTAssertEqual(deleteConfirmationRequest?.workspaceId, firstWorkspace.id)
+        XCTAssertEqual(manager.workspaces.map(\.id), [firstWorkspace.id, secondWorkspace.id])
         XCTAssertTrue(didJumpToCompletion)
         XCTAssertEqual(manager.window.selectedWorkspaceId, secondWorkspace.id)
         XCTAssertEqual(manager.workspaces[1].focusedSurfaceId, pendingSurface.id)

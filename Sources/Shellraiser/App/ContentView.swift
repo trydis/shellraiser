@@ -35,35 +35,6 @@ struct ContentView: View {
                 .presentationBackground(.clear)
             }
         }
-        .alert(
-            "Delete Workspace?",
-            isPresented: pendingWorkspaceDeletionIsPresented,
-            presenting: manager.pendingWorkspaceDeletion
-        ) { _ in
-            Button("Cancel", role: .cancel) {
-                manager.cancelPendingWorkspaceDeletion()
-            }
-
-            Button("Delete Workspace", role: .destructive) {
-                manager.confirmPendingWorkspaceDeletion()
-            }
-        } message: { request in
-            Text(
-                "\(request.workspaceName) has \(request.activeProcessCount) active terminal\(request.activeProcessCount == 1 ? "" : "s"). Deleting it will close those processes."
-            )
-        }
-    }
-
-    /// Alert binding used for destructive workspace deletion confirmation.
-    private var pendingWorkspaceDeletionIsPresented: Binding<Bool> {
-        Binding(
-            get: { manager.pendingWorkspaceDeletion != nil },
-            set: { isPresented in
-                if !isPresented {
-                    manager.cancelPendingWorkspaceDeletion()
-                }
-            }
-        )
     }
 
     /// Sheet binding used for shared workspace rename presentation.

@@ -128,11 +128,13 @@ extension WorkspaceManager {
     func handleAgentActivityEvent(_ event: AgentActivityEvent) {
         guard let target = surfaceTarget(for: event.surfaceId) else {
             clearBusySurface(event.surfaceId)
+            clearLiveCodexSessionSurface(event.surfaceId)
             return
         }
 
         switch event.phase {
         case .started:
+            guard event.agentType != .codex else { return }
             markSurfaceBusy(event.surfaceId)
         case .completed:
             clearBusySurface(event.surfaceId)
@@ -154,8 +156,12 @@ extension WorkspaceManager {
                 workspaces: &workspaces,
                 persistence: persistence
             )
+            if event.agentType == .codex {
+                markLiveCodexSessionSurface(event.surfaceId)
+            }
         case .exited:
             clearBusySurface(event.surfaceId)
+            clearLiveCodexSessionSurface(event.surfaceId)
             guard !isTerminating else { return }
             surfaceManager.setResumeEligibility(
                 workspaceId: target.workspaceId,
@@ -334,5 +340,20 @@ extension WorkspaceManager {
     /// Clears working state for a group of surfaces.
     func clearBusySurfaces<S: Sequence>(_ surfaceIds: S) where S.Element == UUID {
         busySurfaceIds.subtract(surfaceIds)
+    }
+
+    /// Records that the runtime discovered a live Codex session for one surface.
+    func markLiveCodexSessionSurface(_ surfaceId: UUID) {
+        liveCodexSessionSurfaceIds.insert(surfaceId)
+    }
+
+    /// Clears one runtime-discovered Codex session gate.
+    func clearLiveCodexSessionSurface(_ surfaceId: UUID) {
+        liveCodexSessionSurfaceIds.remove(surfaceId)
+    }
+
+    /// Clears runtime-discovered Codex session gates for multiple surfaces.
+    func clearLiveCodexSessionSurfaces<S: Sequence>(_ surfaceIds: S) where S.Element == UUID {
+        liveCodexSessionSurfaceIds.subtract(surfaceIds)
     }
 }

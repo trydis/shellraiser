@@ -25,7 +25,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: true,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -61,7 +61,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: true,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -76,7 +76,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: true,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -114,7 +114,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: false,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -129,7 +129,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: true,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -165,7 +165,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             isFocused: false,
             onActivate: {},
             onIdleNotification: {},
-            onUserInput: {},
+            onInput: { _ in },
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
@@ -199,7 +199,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         terminalConfig: TerminalPanelConfig,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -208,7 +208,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         _ = terminalConfig
         _ = onActivate
         _ = onIdleNotification
-        _ = onUserInput
+        _ = onInput
         _ = onTitleChange
         workingDirectoryChangeHandler = onWorkingDirectoryChange
         _ = onChildExited

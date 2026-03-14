@@ -40,6 +40,7 @@ extension WorkspaceManager {
         completionNotifications.removeNotifications(for: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
         clearBusySurface(surfaceId)
+        clearLiveCodexSessionSurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
 
         if let workspace = workspace(id: workspaceId),
@@ -121,8 +122,8 @@ extension WorkspaceManager {
         )
     }
 
-    /// Records generic activity for a surface when the terminal receives user input.
-    func noteSurfaceActivity(workspaceId: UUID, surfaceId: UUID) {
+    /// Records terminal activity and marks gated Codex submit events as busy.
+    func handleSurfaceInput(workspaceId: UUID, surfaceId: UUID, input: SurfaceInputEvent) {
         surfaceManager.setIdleState(
             workspaceId: workspaceId,
             surfaceId: surfaceId,
@@ -136,6 +137,9 @@ extension WorkspaceManager {
               surface.agentType == .codex else {
             return
         }
+
+        guard input.isSubmit else { return }
+        guard liveCodexSessionSurfaceIds.contains(surfaceId) else { return }
 
         markSurfaceBusy(surfaceId)
     }

@@ -437,33 +437,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                     | head -n 1
             }
 
-            extract_codex_surface_id() {
-                session_line="$1"
-                surface_value="$(
-                    printf '%s\n' "$session_line" \
-                        | sed -n 's/.*"surface_id":"\([^"]*\)".*/\1/p' \
-                        | head -n 1
-                )"
-                if [ -n "$surface_value" ]; then
-                    printf '%s\n' "$surface_value"
-                    return 0
-                fi
-
-                surface_value="$(
-                    printf '%s\n' "$session_line" \
-                        | sed -n 's/.*"notify":\[[^]]*"codex","\([^"]*\)","completed"[^]]*\].*/\1/p' \
-                        | head -n 1
-                )"
-                if [ -n "$surface_value" ]; then
-                    printf '%s\n' "$surface_value"
-                    return 0
-                fi
-
-                printf '%s\n' "$session_line" \
-                    | sed -n 's/.*"notify":"[^"]*\\\\"codex\\\\",\\\\"\([^"]*\)\\\\",\\\\"completed\\\\"[^"]*".*/\1/p' \
-                    | head -n 1
-            }
-
             normalize_codex_session_timestamp() {
                 timestamp="${1:-}"
                 case "$timestamp" in
@@ -497,24 +470,13 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 [ "$latest_timestamp" = "$candidate_timestamp" ]
             }
 
-            surface_matches_current_codex_session() {
-                session_line="$1"
-                candidate_surface_id="$(extract_codex_surface_id "$session_line")"
-                [ -n "$candidate_surface_id" ] && [ "$candidate_surface_id" = "$surface_id" ]
-            }
-
-            attempts=0
-            while [ "$attempts" -lt 40 ]; do
+            while :; do
                 [ -f "$stamp_file" ] || exit 0
 
                 while IFS= read -r session_file; do
                     [ -f "$session_file" ] || continue
                     first_line="$(sed -n '1p' "$session_file" 2>/dev/null || true)"
                     if ! printf '%s\n' "$first_line" | grep -F "\"cwd\":\"$cwd\"" >/dev/null; then
-                        continue
-                    fi
-
-                    if ! surface_matches_current_codex_session "$first_line"; then
                         continue
                     fi
 
@@ -536,7 +498,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         $(find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null | sort -r)
         EOF
 
-                attempts=$((attempts + 1))
                 sleep 0.5
             done
         }
