@@ -8,7 +8,12 @@ if [[ -n "${BASH_VERSION:-}" ]]; then
         shellraiser_script_sourced="0"
     fi
 else
-    shellraiser_script_path="$0"
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        shellraiser_script_path="${(%):-%x}"
+    else
+        shellraiser_script_path="$0"
+    fi
+
     if [[ -n "${ZSH_VERSION:-}" && "${ZSH_EVAL_CONTEXT:-}" == *:file ]]; then
         shellraiser_script_sourced="1"
     else
