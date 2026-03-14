@@ -11,7 +11,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     private var surfaceHandle: ghostty_surface_t?
     private var onActivate: () -> Void
     private var onIdleNotification: () -> Void
-    private var onUserInput: () -> Void
+    private var onInput: (SurfaceInputEvent) -> Void
     private var onTitleChange: (String) -> Void
     private var onWorkingDirectoryChange: (String) -> Void
     private var onChildExited: () -> Void
@@ -32,7 +32,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         terminalConfig: TerminalPanelConfig,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -42,7 +42,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.terminalConfig = terminalConfig
         self.onActivate = onActivate
         self.onIdleNotification = onIdleNotification
-        self.onUserInput = onUserInput
+        self.onInput = onInput
         self.onTitleChange = onTitleChange
         self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
@@ -162,6 +162,10 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         )
 
         let translatedEvent = translatedKeyEvent(from: event, modifiers: translatedModifiers)
+        let inputEvent = SurfaceInputEvent.classifyUserKey(
+            keyCode: event.keyCode,
+            modifiers: translatedEvent.modifierFlags
+        )
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         let markedTextBefore = markedText.length > 0
 
@@ -171,7 +175,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
            !translatedEvent.modifierFlags.contains(.command),
            !translatedEvent.modifierFlags.contains(.control),
            !translatedEvent.modifierFlags.contains(.option) {
-            onUserInput()
+            onInput(inputEvent)
             GhosttyRuntime.shared.sendKeyEvent(
                 surfaceId: surfaceModel.id,
                 event: event,
@@ -194,7 +198,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
 
         if let textEvents = keyTextAccumulator, !textEvents.isEmpty {
             for text in textEvents {
-                onUserInput()
+                onInput(inputEvent)
                 GhosttyRuntime.shared.sendKeyEvent(
                     surfaceId: surfaceModel.id,
                     event: event,
@@ -208,7 +212,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         }
 
         if didInterpretCommand {
-            onUserInput()
+            onInput(inputEvent)
             GhosttyRuntime.shared.sendKeyEvent(
                 surfaceId: surfaceModel.id,
                 event: event,
@@ -219,7 +223,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             return
         }
 
-        onUserInput()
+        onInput(inputEvent)
         GhosttyRuntime.shared.sendKeyEvent(
             surfaceId: surfaceModel.id,
             event: event,
@@ -422,7 +426,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         terminalConfig: TerminalPanelConfig,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
-        onUserInput: @escaping () -> Void,
+        onInput: @escaping (SurfaceInputEvent) -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
@@ -432,7 +436,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.terminalConfig = terminalConfig
         self.onActivate = onActivate
         self.onIdleNotification = onIdleNotification
-        self.onUserInput = onUserInput
+        self.onInput = onInput
         self.onTitleChange = onTitleChange
         self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
@@ -592,7 +596,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         }
 
         guard !text.isEmpty else { return }
-        onUserInput()
+        onInput(.userInput)
         GhosttyRuntime.shared.sendText(surfaceId: surfaceModel.id, text: text)
     }
 
@@ -606,7 +610,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
 
     /// Exposes paste support to the AppKit responder chain.
     @objc func paste(_ sender: Any?) {
-        onUserInput()
+        onInput(.userInput)
         _ = GhosttyRuntime.shared.performBindingAction(
             surfaceId: surfaceModel.id,
             action: "paste_from_clipboard"
@@ -637,7 +641,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     /// Accepts AppKit service paste operations.
     func readSelection(from pboard: NSPasteboard) -> Bool {
         guard let text = pboard.opinionatedStringContents, !text.isEmpty else { return false }
-        onUserInput()
+        onInput(.userInput)
         GhosttyRuntime.shared.sendText(surfaceId: surfaceModel.id, text: text)
         return true
     }
