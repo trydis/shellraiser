@@ -1,9 +1,15 @@
+import AppKit
 import XCTest
 @testable import Shellraiser
 
 /// Covers AppleScript-oriented workspace and split behavior.
 @MainActor
 final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
+    override func setUp() {
+        super.setUp()
+        _ = NSApplication.shared
+    }
+
     /// Verifies creating a workspace with a scripted name applies that name to workspace state.
     func testNewWorkspaceAppliesProvidedName() {
         let manager = makeWorkspaceManager()
@@ -90,6 +96,43 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         }
 
         XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/project")
+    }
+
+    /// Verifies scripted splits inherit the source surface cwd when no explicit cwd configuration is provided.
+    func testSplitScriptTerminalInheritsSourceWorkingDirectoryWithoutConfiguration() {
+        let manager = makeWorkspaceManager()
+        var sourceSurface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000008F1")!,
+            title: "Source"
+        )
+        sourceSurface.terminalConfig.workingDirectory = "/tmp/script-project"
+
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-0000000008F2")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-0000000008F3")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [sourceSurface]),
+                focusedSurfaceId: sourceSurface.id
+            )
+        ]
+
+        guard let createdTerminal = manager.splitScriptTerminal(
+            surfaceId: sourceSurface.id,
+            direction: "right",
+            configuration: nil
+        ) else {
+            return XCTFail("Expected scripted split to create a terminal.")
+        }
+
+        XCTAssertEqual(createdTerminal.workingDirectory, "/tmp/script-project")
+
+        guard let createdSurfaceId = UUID(uuidString: createdTerminal.id),
+              let createdSurface = surface(in: manager.workspaces[0].rootPane, surfaceId: createdSurfaceId) else {
+            return XCTFail("Expected workspace state to contain the scripted split surface.")
+        }
+
+        XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/script-project")
     }
 
     /// Verifies unique-id terminal resolution survives later pane mutations that reorder terminal snapshots.

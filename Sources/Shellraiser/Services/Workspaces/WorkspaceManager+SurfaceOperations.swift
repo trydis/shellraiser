@@ -90,14 +90,19 @@ extension WorkspaceManager {
         workspaceId: UUID,
         paneId: UUID,
         orientation: SplitOrientation,
-        position: SplitChildPosition = .second
+        position: SplitChildPosition = .second,
+        sourceSurfaceId: UUID? = nil
     ) {
         if let surfaceId = surfaceManager.splitPane(
             workspaceId: workspaceId,
             paneId: paneId,
             orientation: orientation,
             position: position,
-            newSurface: configuredDefaultSurface(),
+            newSurface: configuredSplitSurface(
+                workspaceId: workspaceId,
+                paneId: paneId,
+                sourceSurfaceId: sourceSurfaceId
+            ),
             workspaces: &workspaces,
             persistence: persistence
         ) {
@@ -232,7 +237,12 @@ extension WorkspaceManager {
     /// Splits the currently focused pane in the selected workspace.
     func splitFocusedPane(orientation: SplitOrientation) {
         guard let context = focusedPaneContext() else { return }
-        splitPane(workspaceId: context.workspaceId, paneId: context.paneId, orientation: orientation)
+        splitPane(
+            workspaceId: context.workspaceId,
+            paneId: context.paneId,
+            orientation: orientation,
+            sourceSurfaceId: context.surfaceId
+        )
     }
 
     /// Closes the currently focused surface in the selected workspace.
@@ -431,7 +441,12 @@ extension WorkspaceManager {
                 surface: configuredDefaultSurface()
             )
         case .split(let orientation):
-            splitPane(workspaceId: context.workspaceId, paneId: context.paneId, orientation: orientation)
+            splitPane(
+                workspaceId: context.workspaceId,
+                paneId: context.paneId,
+                orientation: orientation,
+                sourceSurfaceId: context.surfaceId
+            )
         case .closeActiveItem:
             guard let surfaceId = closeSurfaceId(for: context) else { return false }
             closeSurface(workspaceId: context.workspaceId, paneId: context.paneId, surfaceId: surfaceId)
@@ -536,6 +551,51 @@ extension WorkspaceManager {
         return surface
     }
 
+    /// Builds the standard surface model used by split flows, inheriting cwd from the source surface when available.
+    func configuredSplitSurface(
+        workspaceId: UUID,
+        paneId: UUID,
+        sourceSurfaceId: UUID? = nil
+    ) -> SurfaceModel {
+        var surface = SurfaceModel.makeDefault()
+        surface.terminalConfig.workingDirectory = resolvedSplitWorkingDirectory(
+            workspaceId: workspaceId,
+            paneId: paneId,
+            sourceSurfaceId: sourceSurfaceId
+        ) ?? NSHomeDirectory()
+        return surface
+    }
+
+    /// Resolves the best available cwd to seed a newly split terminal surface.
+    func resolvedSplitWorkingDirectory(
+        workspaceId: UUID,
+        paneId: UUID,
+        sourceSurfaceId: UUID? = nil
+    ) -> String? {
+        guard let workspace = workspace(id: workspaceId) else { return nil }
+
+        if let sourceSurfaceId {
+            guard let surface = surface(in: workspace.rootPane, surfaceId: sourceSurfaceId) else {
+                return nil
+            }
+
+            return normalizedWorkingDirectory(surface.terminalConfig.workingDirectory)
+        }
+
+        guard let activeSurfaceId = workspace.rootPane.activeSurfaceId(in: paneId),
+              let surface = surface(in: workspace.rootPane, surfaceId: activeSurfaceId) else {
+            return nil
+        }
+
+        return normalizedWorkingDirectory(surface.terminalConfig.workingDirectory)
+    }
+
+    /// Trims a cwd string and returns `nil` when it carries no usable path.
+    func normalizedWorkingDirectory(_ workingDirectory: String?) -> String? {
+        let trimmedWorkingDirectory = workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedWorkingDirectory.isEmpty ? nil : trimmedWorkingDirectory
+    }
+
     /// Returns focused pane context resolved from responder, workspace, and pane state.
     private func focusedPaneContext() -> PaneCommandContext? {
         guard let workspaceId = window.selectedWorkspaceId,
@@ -567,7 +627,7 @@ extension WorkspaceManager {
 
     /// Returns the surface id of the current first-responder terminal view, if any.
     func currentResponderSurfaceId() -> UUID? {
-        guard let responder = NSApp.keyWindow?.firstResponder else { return nil }
+        guard let responder = NSApplication.shared.keyWindow?.firstResponder else { return nil }
 
         if let host = responder as? LibghosttySurfaceView {
             return host.surfaceId

@@ -249,7 +249,7 @@ extension WorkspaceManager {
 
     /// Returns whether a completion should surface as a Notification Center banner.
     private func shouldScheduleCompletionNotification(for surfaceId: UUID) -> Bool {
-        guard NSApp.isActive else { return true }
+        guard NSApplication.shared.isActive else { return true }
 
         if isSurfaceCurrentlyFocused(surfaceId) {
             CompletionDebugLogger.log(
@@ -263,7 +263,7 @@ extension WorkspaceManager {
 
     /// Returns whether the supplied surface currently owns focus in the active app window.
     private func isSurfaceCurrentlyFocused(_ surfaceId: UUID) -> Bool {
-        NSApp.isActive && currentResponderSurfaceId() == surfaceId
+        NSApplication.shared.isActive && currentResponderSurfaceId() == surfaceId
     }
 
     /// Records a handled completion so the pane border can fade out instead of disappearing instantly.
