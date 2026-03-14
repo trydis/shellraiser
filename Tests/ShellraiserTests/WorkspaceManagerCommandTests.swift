@@ -176,6 +176,86 @@ final class WorkspaceManagerCommandTests: WorkspaceTestCase {
         XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, leftSurface.id)
     }
 
+    /// Verifies app-driven pane splits inherit the source surface's tracked cwd.
+    func testPerformPaneCommandSplitInheritsSourceSurfaceWorkingDirectory() {
+        let manager = makeWorkspaceManager()
+        var sourceSurface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001231")!,
+            title: "Source"
+        )
+        sourceSurface.terminalConfig.workingDirectory = "/tmp/project"
+
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001232")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001233")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Split",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [sourceSurface], activeSurfaceId: sourceSurface.id),
+                focusedSurfaceId: sourceSurface.id
+            )
+        ]
+
+        XCTAssertTrue(
+            manager.performPaneCommand(
+                .split(.horizontal),
+                workspaceId: workspaceId,
+                paneId: paneId,
+                surfaceId: sourceSurface.id
+            )
+        )
+
+        guard case .split(let split) = manager.workspaces[0].rootPane else {
+            return XCTFail("Expected split command to create a split node.")
+        }
+        guard let createdSurfaceId = split.second.firstActiveSurfaceId(),
+              let createdSurface = surface(in: manager.workspaces[0].rootPane, surfaceId: createdSurfaceId) else {
+            return XCTFail("Expected split command to create a focused surface.")
+        }
+
+        XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/project")
+    }
+
+    /// Verifies app-driven pane splits fall back to the home directory when no usable cwd is tracked.
+    func testPerformPaneCommandSplitFallsBackToHomeDirectoryForBlankWorkingDirectory() {
+        let manager = makeWorkspaceManager()
+        var sourceSurface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001241")!,
+            title: "Blank Source"
+        )
+        sourceSurface.terminalConfig.workingDirectory = "   \n\t  "
+
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001242")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001243")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Split",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [sourceSurface], activeSurfaceId: sourceSurface.id),
+                focusedSurfaceId: sourceSurface.id
+            )
+        ]
+
+        XCTAssertTrue(
+            manager.performPaneCommand(
+                .split(.vertical),
+                workspaceId: workspaceId,
+                paneId: paneId,
+                surfaceId: sourceSurface.id
+            )
+        )
+
+        guard case .split(let split) = manager.workspaces[0].rootPane else {
+            return XCTFail("Expected split command to create a split node.")
+        }
+        guard let createdSurfaceId = split.second.firstActiveSurfaceId(),
+              let createdSurface = surface(in: manager.workspaces[0].rootPane, surfaceId: createdSurfaceId) else {
+            return XCTFail("Expected split command to create a focused surface.")
+        }
+
+        XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, NSHomeDirectory())
+    }
+
     /// Verifies command palette state reflects selection, pending completions, and workspace switch limits.
     func testCommandPaletteItemsReflectWorkspaceState() {
         let manager = makeWorkspaceManager()

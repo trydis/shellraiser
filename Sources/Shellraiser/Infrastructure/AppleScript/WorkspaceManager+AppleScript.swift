@@ -109,7 +109,12 @@ extension WorkspaceManager {
             paneId: target.paneId,
             orientation: placement.orientation,
             position: placement.position,
-            newSurface: makeScriptSurface(configuration: configuration),
+            newSurface: makeScriptSplitSurface(
+                configuration: configuration,
+                workspaceId: target.workspaceId,
+                paneId: target.paneId,
+                sourceSurfaceId: target.surfaceId
+            ),
             workspaces: &workspaces,
             persistence: persistence
         )
@@ -201,9 +206,30 @@ private extension WorkspaceManager {
     /// Builds a surface model for AppleScript-driven creation flows.
     func makeScriptSurface(configuration: ScriptableSurfaceConfiguration?) -> SurfaceModel {
         var surface = SurfaceModel.makeDefault()
-        if let configuration {
-            surface.terminalConfig.workingDirectory = configuration.initialWorkingDirectory
+        if let configuration,
+           let workingDirectory = normalizedWorkingDirectory(configuration.initialWorkingDirectory) {
+            surface.terminalConfig.workingDirectory = workingDirectory
         }
+        return surface
+    }
+
+    /// Builds a surface model for AppleScript split flows, inheriting cwd when no explicit cwd is provided.
+    func makeScriptSplitSurface(
+        configuration: ScriptableSurfaceConfiguration?,
+        workspaceId: UUID,
+        paneId: UUID,
+        sourceSurfaceId: UUID
+    ) -> SurfaceModel {
+        var surface = makeScriptSurface(configuration: configuration)
+        guard configuration == nil || normalizedWorkingDirectory(configuration?.initialWorkingDirectory) == nil else {
+            return surface
+        }
+
+        surface.terminalConfig.workingDirectory = resolvedSplitWorkingDirectory(
+            workspaceId: workspaceId,
+            paneId: paneId,
+            sourceSurfaceId: sourceSurfaceId
+        ) ?? NSHomeDirectory()
         return surface
     }
 
@@ -231,7 +257,7 @@ private extension WorkspaceManager {
 
     /// Applies workspace selection and pane activation for a resolved script surface.
     func focusScriptSurface(_ context: ScriptSurfaceContext) {
-        NSApp.activate(ignoringOtherApps: true)
+        NSApplication.shared.activate(ignoringOtherApps: true)
         GhosttyRuntime.shared.setAppFocus(true)
         selectWorkspace(context.workspaceId)
         activateSurface(
