@@ -470,8 +470,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 [ "$latest_timestamp" = "$candidate_timestamp" ]
             }
 
-            attempts=0
-            while [ "$attempts" -lt 40 ]; do
+            while :; do
                 [ -f "$stamp_file" ] || exit 0
 
                 while IFS= read -r session_file; do
@@ -499,7 +498,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         $(find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null | sort -r)
         EOF
 
-                attempts=$((attempts + 1))
                 sleep 0.5
             done
         }
