@@ -117,6 +117,7 @@ class WorkspaceTestCase: XCTestCase {
         runtimeBridge: MockAgentRuntimeBridge? = nil,
         notifications: MockAgentCompletionNotificationManager? = nil,
         eventMonitor: MockAgentActivityEventMonitor? = nil,
+        confirmWorkspaceDeletion: @escaping WorkspaceManager.WorkspaceDeletionConfirmer = { _ in true },
         gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
@@ -129,6 +130,7 @@ class WorkspaceTestCase: XCTestCase {
             completionNotifications: notifications ?? MockAgentCompletionNotificationManager(),
             activityEventMonitor: eventMonitor ?? MockAgentActivityEventMonitor(),
             registersLocalShortcutMonitor: false,
+            confirmWorkspaceDeletion: confirmWorkspaceDeletion,
             gitStateResolver: gitStateResolver
         )
     }

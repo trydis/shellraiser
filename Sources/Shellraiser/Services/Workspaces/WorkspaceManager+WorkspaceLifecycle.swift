@@ -79,11 +79,14 @@ extension WorkspaceManager {
             return
         }
 
-        pendingWorkspaceDeletion = WorkspaceDeletionRequest(
+        let request = WorkspaceDeletionRequest(
             workspaceId: workspace.id,
             workspaceName: workspace.name,
             activeProcessCount: activeProcessCount
         )
+
+        guard confirmWorkspaceDeletion(request) else { return }
+        deleteWorkspace(id: workspace.id)
     }
 
     /// Requests deletion for the currently selected workspace.
@@ -118,18 +121,6 @@ extension WorkspaceManager {
     /// Cancels the currently pending workspace rename request.
     func cancelPendingWorkspaceRename() {
         pendingWorkspaceRename = nil
-    }
-
-    /// Confirms the currently pending workspace deletion request.
-    func confirmPendingWorkspaceDeletion() {
-        guard let request = pendingWorkspaceDeletion else { return }
-        pendingWorkspaceDeletion = nil
-        deleteWorkspace(id: request.workspaceId)
-    }
-
-    /// Cancels the currently pending workspace deletion request.
-    func cancelPendingWorkspaceDeletion() {
-        pendingWorkspaceDeletion = nil
     }
 
     /// Selects a workspace in the current window.

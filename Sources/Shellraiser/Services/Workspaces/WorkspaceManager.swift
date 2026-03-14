@@ -27,7 +27,7 @@ struct WorkspaceDeletionRequest: Identifiable {
     let workspaceName: String
     let activeProcessCount: Int
 
-    /// Stable identity used by SwiftUI alert presentation.
+    /// Stable identity used by confirmation flows and tests.
     var id: UUID { workspaceId }
 }
 
@@ -45,6 +45,9 @@ struct WorkspaceRenameRequest: Identifiable {
 final class WorkspaceManager: ObservableObject {
     /// Callable resolver used to derive Git state from a working directory.
     typealias GitStateResolver = @Sendable (String) -> ResolvedGitState?
+
+    /// Presents workspace-deletion confirmation and returns whether deletion should continue.
+    typealias WorkspaceDeletionConfirmer = (WorkspaceDeletionRequest) -> Bool
 
     /// App-owned commands that operate on the focused pane and its active tab.
     enum FocusedPaneCommand {
@@ -68,7 +71,6 @@ final class WorkspaceManager: ObservableObject {
     @Published var workspaces: [WorkspaceModel] = []
     @Published var window: WindowModel = .initial()
     @Published var isCommandPalettePresented = false
-    @Published var pendingWorkspaceDeletion: WorkspaceDeletionRequest?
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
     @Published var busySurfaceIds: Set<UUID> = []
@@ -81,6 +83,7 @@ final class WorkspaceManager: ObservableObject {
     let completionNotifications: any AgentCompletionNotificationManaging
     let activityEventMonitor: any AgentActivityEventMonitoring
     let gitStateResolver: GitStateResolver
+    let confirmWorkspaceDeletion: WorkspaceDeletionConfirmer
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
@@ -98,6 +101,7 @@ final class WorkspaceManager: ObservableObject {
         completionNotifications: any AgentCompletionNotificationManaging = AgentCompletionNotificationManager(),
         activityEventMonitor: (any AgentActivityEventMonitoring)? = nil,
         registersLocalShortcutMonitor: Bool = true,
+        confirmWorkspaceDeletion: @escaping WorkspaceDeletionConfirmer = WorkspaceManager.presentWorkspaceDeletionConfirmation,
         gitStateResolver: @escaping GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         }
@@ -113,6 +117,7 @@ final class WorkspaceManager: ObservableObject {
         self.completionNotifications = completionNotifications
         resolvedRuntimeBridge.prepareRuntimeSupport()
         self.activityEventMonitor = resolvedActivityEventMonitor
+        self.confirmWorkspaceDeletion = confirmWorkspaceDeletion
         self.gitStateResolver = gitStateResolver
 
         completionNotifications.onActivateSurface = { [weak self] surfaceId in
@@ -136,6 +141,17 @@ final class WorkspaceManager: ObservableObject {
         if registersLocalShortcutMonitor {
             registerLocalShortcutMonitor()
         }
+    }
+
+    /// Presents the default AppKit confirmation used before deleting a live workspace.
+    private static func presentWorkspaceDeletionConfirmation(_ request: WorkspaceDeletionRequest) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Delete Workspace?"
+        alert.informativeText = "\(request.workspaceName) has \(request.activeProcessCount) active terminal\(request.activeProcessCount == 1 ? "" : "s"). Deleting it will close those processes."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete Workspace")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     deinit {
