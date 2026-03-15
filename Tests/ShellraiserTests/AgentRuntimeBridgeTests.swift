@@ -26,14 +26,13 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
 
-        XCTAssertTrue(wrapperContents.contains("\"teammateMode\": \"tmux\""))
         XCTAssertTrue(wrapperContents.contains("teammate_mode_args=\"--teammate-mode tmux\""))
-        XCTAssertTrue(wrapperContents.contains("claude-wrapper"))
-        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
-        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
-        XCTAssertTrue(wrapperContents.contains("--debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\""))
-        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" --teammate-mode tmux --debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\" \"$@\""))
-        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" --debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\" \"$@\""))
+        XCTAssertFalse(wrapperContents.contains("\"teammateMode\": \"tmux\""))
+        XCTAssertFalse(wrapperContents.contains("claude-wrapper"))
+        XCTAssertFalse(wrapperContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
+        XCTAssertFalse(wrapperContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
+        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" --teammate-mode tmux \"$@\""))
+        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" \"$@\""))
         XCTAssertTrue(wrapperContents.contains("\"SessionStart\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"startup\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"resume\""))
@@ -113,7 +112,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
     }
 
     /// Verifies the runtime bridge installs a tmux wrapper only for Claude-managed subprocess PATH injection.
-    func testPrepareRuntimeSupportWritesTmuxWrapperIntoTeamBinWhenShimIsAvailable() throws {
+    func testPrepareRuntimeSupportDoesNotWriteSharedTmuxWrapperWhenShimIsAvailable() throws {
         let shimURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("ShellraiserTests-tmux-\(UUID().uuidString)")
         let shimContents = "#!/bin/sh\nexit 0\n"
@@ -141,12 +140,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         bridge.prepareRuntimeSupport()
 
-        let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
         let claudeWrapperContents = try String(contentsOf: claudeWrapperURL, encoding: .utf8)
-        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrapperURL.path))
-        XCTAssertTrue(wrapperContents.contains(shimURL.path))
-        XCTAssertTrue(wrapperContents.contains("tmux-wrapper"))
-        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_REAL_TMUX_SHIM"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: wrapperURL.path))
         XCTAssertTrue(claudeWrapperContents.contains("SHELLRAISER_TEAM_BIN"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: bridge.binDirectory.appendingPathComponent("tmux").path))
     }
@@ -177,11 +172,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             .appendingPathComponent(surfaceID.uuidString, isDirectory: true)
 
         XCTAssertEqual(environment["SHELLRAISER_TEAM_BIN"], surfaceTeamBinDirectory.path)
-        XCTAssertEqual(environment["SHELLRAISER_WRAPPER_DEBUG_LOG"], bridge.debugLogURL.path)
-        XCTAssertEqual(
-            environment["SHELLRAISER_CLAUDE_DEBUG_LOG"],
-            bridge.runtimeDirectory.appendingPathComponent("claude-debug-\(environment["SHELLRAISER_SURFACE_ID"]!).log").path
-        )
+        XCTAssertNil(environment["SHELLRAISER_WRAPPER_DEBUG_LOG"])
+        XCTAssertNil(environment["SHELLRAISER_CLAUDE_DEBUG_LOG"])
         XCTAssertEqual(
             environment["PATH"],
             "\(bridge.binDirectory.path):\(surfaceTeamBinDirectory.path):/usr/bin:/bin"
@@ -217,8 +209,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let zshRcContents = try String(contentsOf: zshRcURL, encoding: .utf8)
         XCTAssertTrue(zshRcContents.contains("SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:"))
         XCTAssertTrue(zshRcContents.contains("export SHELLRAISER_EVENT_LOG"))
-        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
-        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
+        XCTAssertFalse(zshRcContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
+        XCTAssertFalse(zshRcContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
         XCTAssertTrue(zshRcContents.contains("SHELLRAISER_TEAM_BIN"))
     }
 }
