@@ -251,12 +251,26 @@ prepare_workspace_worktree_with_status() {
     local workspace_name="$2"
     local main_repo_root branch_name worktree_path existing_worktree_path registered_branch
 
-    repo_root="$(cd "$repo_root" && pwd -P)"
-    main_repo_root="$(resolve_main_repo_root "$repo_root")"
-    branch_name="$(slugify_workspace_name "$workspace_name")"
-    worktree_path="$(resolve_workspace_worktree_path "$main_repo_root" "$branch_name")"
+    repo_root="$(cd "$repo_root" && pwd -P)" || return 1
+    main_repo_root="$(resolve_main_repo_root "$repo_root")" || return 1
+    [[ -n "$main_repo_root" ]] || {
+        fail_with_message "Failed to resolve the canonical repository root for '$repo_root'."
+        return 1
+    }
 
-    ensure_local_branch_exists "$main_repo_root" "main"
+    branch_name="$(slugify_workspace_name "$workspace_name")" || return 1
+    [[ -n "$branch_name" ]] || {
+        fail_with_message "Failed to derive a branch name for workspace '$workspace_name'."
+        return 1
+    }
+
+    worktree_path="$(resolve_workspace_worktree_path "$main_repo_root" "$branch_name")" || return 1
+    [[ -n "$worktree_path" ]] || {
+        fail_with_message "Failed to resolve the worktree path for branch '$branch_name'."
+        return 1
+    }
+
+    ensure_local_branch_exists "$main_repo_root" "main" || return 1
 
     existing_worktree_path="$(resolve_registered_worktree_for_branch "$main_repo_root" "$branch_name")"
     registered_branch="$(resolve_registered_branch_for_worktree "$main_repo_root" "$worktree_path")"
