@@ -518,7 +518,7 @@ public struct TmuxShimCLI {
 
         var outputLine = ""
         try stateStore.transact { state in
-            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            var socketState = state.socketState(named: socketName)
             let resolved = try resolveTarget(targetName, in: socketState)
             let createdSurface = try controller.splitSurface(
                 id: resolved.pane.surfaceId,
@@ -567,9 +567,8 @@ public struct TmuxShimCLI {
         }
 
         try stateStore.transact { state in
-            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let socketState = state.socketState(named: socketName)
             let resolved = try resolveTarget(targetName, in: socketState)
-            state.setSocketState(socketState, named: socketName)
 
             if literalMode {
                 try controller.sendText(tokens.joined(separator: " "), toSurfaceWithID: resolved.pane.surfaceId)
@@ -589,7 +588,7 @@ public struct TmuxShimCLI {
         _ = parser.drainRemaining()
 
         try stateStore.transact { state in
-            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            var socketState = state.socketState(named: socketName)
             let resolved = try resolveTarget(targetName, in: socketState)
             try controller.focusSurface(id: resolved.pane.surfaceId)
 
@@ -611,9 +610,8 @@ public struct TmuxShimCLI {
         try parser.ensureFullyParsed()
 
         try stateStore.transact { state in
-            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let socketState = state.socketState(named: socketName)
             _ = try resolveTarget(targetName, in: socketState)
-            state.setSocketState(socketState, named: socketName)
         }
         return ShellraiserCommandResult()
     }
@@ -669,7 +667,7 @@ public struct TmuxShimCLI {
 
         var outputLine = ""
         try stateStore.transact { state in
-            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            var socketState = state.socketState(named: socketName)
             let resolved = try resolveTarget(targetName, in: socketState)
             let createdSurface = try controller.splitSurface(
                 id: resolved.pane.surfaceId,
@@ -714,7 +712,7 @@ public struct TmuxShimCLI {
         _ = parser.drainRemaining()
 
         try stateStore.transact { state in
-            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let socketState = state.socketState(named: socketName)
             if let targetName {
                 if targetName.hasPrefix("%") || targetName.contains(":") {
                     _ = try resolveTarget(targetName, in: socketState)
@@ -722,7 +720,6 @@ public struct TmuxShimCLI {
                     _ = try resolveSession(targetName, in: socketState)
                 }
             }
-            state.setSocketState(socketState, named: socketName)
         }
         return ShellraiserCommandResult()
     }
