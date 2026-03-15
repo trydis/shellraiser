@@ -438,6 +438,54 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(result.standardOutput, "%2\n")
     }
 
+    /// Verifies `tmux split-window -c` forwards the working directory to the controller.
+    func testTmuxSplitWindowForwardsWorkingDirectory() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                nextPaneOrdinal: 2,
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["split-window", "-t", "coord", "-c", "/tmp/agents"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.splitEvents.first?.2, "/tmp/agents")
+    }
+
+    /// Verifies `tmux new-window -c` forwards the working directory to the controller.
+    func testTmuxNewWindowForwardsWorkingDirectory() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                nextPaneOrdinal: 2,
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["new-window", "-t", "coord", "-c", "/tmp/agents"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.splitEvents.first?.2, "/tmp/agents")
+    }
+
     /// Verifies `tmux send-keys` recognizes `ctrl+x` and `ctrl-x` forms in addition to `C-x`.
     func testTmuxSendKeysRecognizesAllControlKeyPrefixForms() throws {
         let controller = MockShellraiserController()
