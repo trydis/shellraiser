@@ -512,34 +512,6 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertTrue(try store.load().sessionsByName.isEmpty)
     }
 
-    /// Verifies `tmux a` focuses the active pane in the socket-scoped session.
-    func testTmuxAttachAliasFocusesActivePane() throws {
-        let controller = MockShellraiserController()
-        let store = InMemoryTmuxShimStateStore(
-            state: TmuxShimState(
-                socketsByName: [
-                    "claude-swarm-1": TmuxShimSocketState(
-                        nextPaneOrdinal: 2,
-                        sessionsByName: [
-                            "claude": TmuxShimSession(
-                                name: "claude",
-                                workspaceId: "workspace-1",
-                                panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
-                                focusedPaneId: "%1"
-                            )
-                        ]
-                    )
-                ]
-            )
-        )
-        let cli = TmuxShimCLI(controller: controller, stateStore: store)
-
-        let result = cli.run(arguments: ["-L", "claude-swarm-1", "a"])
-
-        XCTAssertEqual(result.exitCode, 0)
-        XCTAssertEqual(controller.focusedSurfaceIDs, ["surface-1"])
-    }
-
     /// Verifies the AppleScript client emits a quoted application literal in `tell application`.
     func testAppleScriptClientInlinesApplicationLiteralInScripts() throws {
         let runner = CapturingAppleScriptRunner(

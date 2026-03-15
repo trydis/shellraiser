@@ -318,8 +318,6 @@ public struct TmuxShimCLI {
                 return try runListPanes(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "list-windows":
                 return try runListWindows(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
-            case "display-message":
-                return try runDisplayMessage(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "new-window":
                 return try runNewWindow(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "set-option":
@@ -328,8 +326,6 @@ public struct TmuxShimCLI {
                 return try runKillPane(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "kill-session":
                 return try runKillSession(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
-            case "attach-session", "a", "attach":
-                return try runAttachSession(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             default:
                 throw ShellraiserControlError("Unsupported tmux command: \(command)")
             }
@@ -627,28 +623,6 @@ public struct TmuxShimCLI {
         return ShellraiserCommandResult(standardOutput: lines.joined(separator: "\n") + (lines.isEmpty ? "" : "\n"))
     }
 
-    /// Executes `tmux display-message`.
-    private func runDisplayMessage(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
-        var parser = CommandArgumentParser(arguments: arguments)
-        _ = parser.flag("-p")
-        let targetName = parser.value(for: "-t")
-        let format = try parser.requiredPositional("format")
-        try parser.ensureFullyParsed()
-
-        var state = try loadState()
-        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        let line = try renderFormat(
-            format,
-            session: resolved.session,
-            pane: resolved.pane,
-            surface: controller.surface(withID: resolved.pane.surfaceId)
-        )
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
-        return ShellraiserCommandResult(standardOutput: line + "\n")
-    }
-
     /// Executes `tmux new-window`.
     private func runNewWindow(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
         var parser = CommandArgumentParser(arguments: arguments)
@@ -766,27 +740,6 @@ public struct TmuxShimCLI {
             }
         }
 
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
-        return ShellraiserCommandResult()
-    }
-
-    /// Executes `tmux attach-session` and alias `tmux a`.
-    private func runAttachSession(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
-        var parser = CommandArgumentParser(arguments: arguments)
-        let targetName = parser.value(for: "-t")
-        try parser.ensureFullyParsed()
-
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        try controller.focusSurface(id: resolved.pane.surfaceId)
-
-        guard var session = socketState.sessionsByName[resolved.session.name] else {
-            throw ShellraiserControlError("Session disappeared during attach.")
-        }
-        session.focusedPaneId = resolved.pane.paneId
-        socketState.sessionsByName[session.name] = session
         state.setSocketState(socketState, named: socketName)
         try stateStore.save(state)
         return ShellraiserCommandResult()
