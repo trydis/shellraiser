@@ -42,6 +42,48 @@ final class AgentTypeAndWorkspaceModelTests: XCTestCase {
         XCTAssertEqual(workspace.name, "Tests")
         XCTAssertEqual(workspace.focusedSurfaceId, initialSurface.id)
         XCTAssertEqual(workspace.rootPane.firstActiveSurfaceId(), initialSurface.id)
+        XCTAssertEqual(workspace.rootWorkingDirectory, "/tmp")
         XCTAssertNil(workspace.zoomedPaneId)
+    }
+
+    /// Verifies older persistence payloads default the workspace root path from the first terminal.
+    func testWorkspaceDecodingBackfillsRootWorkingDirectoryFromFirstSurface() throws {
+        let payload = """
+        {
+          "focusedSurfaceId" : "00000000-0000-0000-0000-000000000501",
+          "id" : "00000000-0000-0000-0000-000000000502",
+          "name" : "Legacy",
+          "rootPane" : {
+            "leaf" : {
+              "activeSurfaceId" : "00000000-0000-0000-0000-000000000501",
+              "id" : "00000000-0000-0000-0000-000000000503",
+              "surfaces" : [
+                {
+                  "agentType" : "codex",
+                  "hasPendingCompletion" : false,
+                  "hasUnreadIdleNotification" : false,
+                  "id" : "00000000-0000-0000-0000-000000000501",
+                  "isIdle" : false,
+                  "lastActivity" : "2023-11-14T22:15:00Z",
+                  "sessionId" : "",
+                  "terminalConfig" : {
+                    "environment" : {},
+                    "shell" : "/bin/zsh",
+                    "workingDirectory" : "/tmp/legacy-root"
+                  },
+                  "title" : "~"
+                }
+              ]
+            },
+            "type" : "leaf"
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let workspace = try decoder.decode(WorkspaceModel.self, from: Data(payload.utf8))
+
+        XCTAssertEqual(workspace.rootWorkingDirectory, "/tmp/legacy-root")
     }
 }

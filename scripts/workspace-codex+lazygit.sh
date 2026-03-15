@@ -7,11 +7,20 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/workspace-shellraiser-common.sh"
 
 main() {
-    local repo_root workspace_name
+    local repo_root workspace_name worktree_root branch_name worktree_status
     repo_root="$(resolve_repo_root)"
     workspace_name="$(resolve_workspace_name "$@")"
+    IFS=$'\t' read -r worktree_root branch_name worktree_status < <(
+        prepare_workspace_worktree_with_status "$repo_root" "$workspace_name"
+    )
+    [[ -n "$worktree_root" && -n "$branch_name" && -n "$worktree_status" ]] \
+        || fail_with_message "Failed to resolve the workspace worktree."
 
-    run_shellraiser_workspace_with_commands "$repo_root" "$workspace_name" "co" "lg"
+    if [[ "$worktree_status" == "created" ]]; then
+        bootstrap_ghostty_for_worktree "$worktree_root"
+    fi
+
+    run_shellraiser_workspace_with_commands "$worktree_root" "$workspace_name" "codex" "lg"
 }
 
 main "$@"

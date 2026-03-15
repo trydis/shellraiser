@@ -150,6 +150,18 @@ final class ShellraiserScriptingController {
         return ScriptableWorkspace(snapshot: snapshot)
     }
 
+    /// Deletes a scriptable workspace directly without UI confirmation sheets.
+    @discardableResult
+    func delete(workspace: ScriptableWorkspace) -> Bool {
+        guard let manager = workspaceManager,
+              let workspaceId = UUID(uuidString: workspace.id) else {
+            return false
+        }
+
+        manager.ensureWorkspacesLoaded()
+        return manager.deleteScriptWorkspace(id: workspaceId)
+    }
+
     /// Splits the pane owning a scripted terminal and returns the newly created terminal.
     func split(
         terminal: ScriptableTerminal,

@@ -30,11 +30,13 @@ extension WorkspaceManager {
     @discardableResult
     func createWorkspace(
         name: String = "New Workspace",
-        initialSurface: SurfaceModel = SurfaceModel.makeDefault()
+        initialSurface: SurfaceModel = SurfaceModel.makeDefault(),
+        rootWorkingDirectory: String? = nil
     ) -> WorkspaceModel {
         workspaceCatalog.createWorkspace(
             name: name,
             initialSurface: initialSurface,
+            rootWorkingDirectory: rootWorkingDirectory,
             workspaces: &workspaces,
             window: &window,
             persistence: persistence

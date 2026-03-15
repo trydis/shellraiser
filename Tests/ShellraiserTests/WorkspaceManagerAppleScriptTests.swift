@@ -96,6 +96,78 @@ final class WorkspaceManagerAppleScriptTests: WorkspaceTestCase {
         }
 
         XCTAssertEqual(createdSurface.terminalConfig.workingDirectory, "/tmp/project")
+        XCTAssertEqual(manager.workspaces.first?.rootWorkingDirectory, "/tmp/project")
+        XCTAssertEqual(workspace.rootWorkingDirectory, "/tmp/project")
+    }
+
+    /// Verifies the scripted workspace root remains stable even when terminals later change directories.
+    func testScriptedWorkspaceRootWorkingDirectoryRemainsStableAfterDirectoryChanges() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        let configuration = ScriptableSurfaceConfiguration()
+        configuration.initialWorkingDirectory = "/tmp/project-root"
+
+        guard let workspace = ShellraiserScriptingController.shared.newWorkspace(
+            name: "Project Root",
+            configuration: configuration
+        ), let terminal = workspace.selectedTab?.terminals.first,
+              let surfaceId = UUID(uuidString: terminal.id),
+              let workspaceId = UUID(uuidString: workspace.id) else {
+            return XCTFail("Expected scripted workspace creation to succeed.")
+        }
+
+        _ = manager.setSurfaceWorkingDirectory(
+            workspaceId: workspaceId,
+            surfaceId: surfaceId,
+            workingDirectory: "/tmp/project-root/subdir"
+        )
+
+        XCTAssertEqual(
+            ShellraiserScriptingController.shared.workspace(id: workspace.id)?.rootWorkingDirectory,
+            "/tmp/project-root"
+        )
+        XCTAssertEqual(manager.workspaces.first?.rootWorkingDirectory, "/tmp/project-root")
+    }
+
+    /// Verifies scripted deletion bypasses confirmation sheets and removes the targeted workspace.
+    func testDeleteScriptWorkspaceDeletesRequestedWorkspace() {
+        let manager = makeWorkspaceManager()
+        manager.hasLoadedPersistedWorkspaces = true
+        ShellraiserScriptingController.shared.install(workspaceManager: manager)
+
+        let target = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000920")!,
+            name: "Target",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000921")!,
+                surfaces: [makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000000922")!)]
+            ),
+            focusedSurfaceId: UUID(uuidString: "00000000-0000-0000-0000-000000000922")!,
+            rootWorkingDirectory: "/tmp/target"
+        )
+        let fallback = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000923")!,
+            name: "Fallback",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000000924")!,
+                surfaces: [makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000000925")!)]
+            ),
+            focusedSurfaceId: UUID(uuidString: "00000000-0000-0000-0000-000000000925")!,
+            rootWorkingDirectory: "/tmp/fallback"
+        )
+        manager.workspaces = [fallback, target]
+        manager.window.selectedWorkspaceId = target.id
+
+        guard let targetWorkspace = ShellraiserScriptingController.shared.workspace(workspaceId: target.id) else {
+            return XCTFail("Expected scriptable workspace lookup to succeed.")
+        }
+
+        XCTAssertTrue(ShellraiserScriptingController.shared.delete(workspace: targetWorkspace))
+        XCTAssertEqual(manager.workspaces.map(\.id), [fallback.id])
+        XCTAssertEqual(manager.window.selectedWorkspaceId, fallback.id)
+        XCTAssertNil(ShellraiserScriptingController.shared.workspace(workspaceId: target.id))
     }
 
     /// Verifies scripted splits inherit the source surface cwd when no explicit cwd configuration is provided.
