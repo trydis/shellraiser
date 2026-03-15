@@ -29,9 +29,17 @@ resolve_repo_root() {
 
 # Returns the canonical primary repository root even when invoked from a linked worktree.
 resolve_main_repo_root() {
-    local common_git_dir repo_root
+    local repo_root="${1:-}"
+    local common_git_dir
 
-    if common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+    if [[ -n "$repo_root" ]]; then
+        repo_root="$(cd "$repo_root" && pwd -P)"
+        if common_git_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+            :
+        else
+            fail_with_message "Failed to resolve the repository common Git directory."
+        fi
+    elif common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
         :
     else
         repo_root="$(resolve_repo_root)"
@@ -218,18 +226,19 @@ resolve_registered_branch_for_worktree() {
 prepare_workspace_worktree_with_status() {
     local repo_root="$1"
     local workspace_name="$2"
-    local branch_name worktree_path existing_worktree_path registered_branch
+    local main_repo_root branch_name worktree_path existing_worktree_path registered_branch
 
     repo_root="$(cd "$repo_root" && pwd -P)"
+    main_repo_root="$(resolve_main_repo_root "$repo_root")"
     branch_name="$(slugify_workspace_name "$workspace_name")"
-    worktree_path="$(resolve_workspace_worktree_path "$repo_root" "$branch_name")"
+    worktree_path="$(resolve_workspace_worktree_path "$main_repo_root" "$branch_name")"
 
-    ensure_local_branch_exists "$repo_root" "main"
+    ensure_local_branch_exists "$main_repo_root" "main"
 
-    existing_worktree_path="$(resolve_registered_worktree_for_branch "$repo_root" "$branch_name")"
-    registered_branch="$(resolve_registered_branch_for_worktree "$repo_root" "$worktree_path")"
+    existing_worktree_path="$(resolve_registered_worktree_for_branch "$main_repo_root" "$branch_name")"
+    registered_branch="$(resolve_registered_branch_for_worktree "$main_repo_root" "$worktree_path")"
 
-    if local_branch_exists "$repo_root" "$branch_name"; then
+    if local_branch_exists "$main_repo_root" "$branch_name"; then
         if [[ -z "$existing_worktree_path" ]]; then
             fail_with_message "Branch '$branch_name' already exists but is not checked out at '$worktree_path'."
         fi
@@ -250,7 +259,7 @@ prepare_workspace_worktree_with_status() {
         fail_with_message "Worktree path '$worktree_path' already exists and is not a registered Git worktree."
     fi
 
-    if ! git -C "$repo_root" worktree add -b "$branch_name" "$worktree_path" main >/dev/null; then
+    if ! git -C "$main_repo_root" worktree add -b "$branch_name" "$worktree_path" main >/dev/null; then
         fail_with_message "Failed to create worktree '$worktree_path' from base branch 'main'."
     fi
 
