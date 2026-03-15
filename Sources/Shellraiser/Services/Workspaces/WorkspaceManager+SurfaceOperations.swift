@@ -145,12 +145,17 @@ extension WorkspaceManager {
         markSurfaceBusy(surfaceId)
     }
 
-    /// Stores or removes an OSC 9;4 progress report for a surface, resetting the 15-second auto-clear timer.
+    /// Interval after which a progress report is automatically cleared if no update arrives.
+    private static let progressAutoClearInterval: TimeInterval = 15
+
+    /// Stores or removes an OSC 9;4 progress report for a surface, resetting the auto-clear timer.
     func setProgressReport(workspaceId: UUID, surfaceId: UUID, report: SurfaceProgressReport?) {
+        guard let workspace = workspace(id: workspaceId),
+              self.surface(in: workspace.rootPane, surfaceId: surfaceId) != nil else { return }
         if let report {
             progressBySurfaceId[surfaceId] = report
             progressClearTimers[surfaceId]?.invalidate()
-            progressClearTimers[surfaceId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+            progressClearTimers[surfaceId] = Timer.scheduledTimer(withTimeInterval: Self.progressAutoClearInterval, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.progressBySurfaceId.removeValue(forKey: surfaceId)
                     self?.progressClearTimers.removeValue(forKey: surfaceId)

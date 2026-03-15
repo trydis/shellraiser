@@ -136,18 +136,6 @@ final class GhosttyRuntime {
         releasedSurfaceIds.remove(surfaceModel.id)
 
         if let existing = hostViewsBySurfaceId[surfaceModel.id] {
-            existing.update(
-                surfaceModel: surfaceModel,
-                terminalConfig: terminalConfig,
-                onActivate: onActivate,
-                onIdleNotification: onIdleNotification,
-                onInput: onInput,
-                onTitleChange: onTitleChange,
-                onWorkingDirectoryChange: onWorkingDirectoryChange,
-                onChildExited: onChildExited,
-                onPaneNavigationRequest: onPaneNavigationRequest,
-                onProgressReport: onProgressReport
-            )
             return existing
         }
 
@@ -817,22 +805,22 @@ final class GhosttyRuntime {
                   let surface = target.target.surface else { return false }
             let surfaceKey = UInt(bitPattern: surface)
             let raw = action.action.progress_report
-            let report: SurfaceProgressReport? = {
-                switch raw.state {
-                case GHOSTTY_PROGRESS_STATE_REMOVE:
-                    return nil
-                case GHOSTTY_PROGRESS_STATE_SET:
-                    return SurfaceProgressReport(state: .set, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
-                case GHOSTTY_PROGRESS_STATE_ERROR:
-                    return SurfaceProgressReport(state: .error, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
-                case GHOSTTY_PROGRESS_STATE_INDETERMINATE:
-                    return SurfaceProgressReport(state: .indeterminate, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
-                case GHOSTTY_PROGRESS_STATE_PAUSE:
-                    return SurfaceProgressReport(state: .pause, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
-                default:
-                    return nil
-                }
-            }()
+            let clampedProgress: UInt8? = raw.progress >= 0 ? UInt8(min(raw.progress, 100)) : nil
+            let report: SurfaceProgressReport?
+            switch raw.state {
+            case GHOSTTY_PROGRESS_STATE_REMOVE:
+                report = nil
+            case GHOSTTY_PROGRESS_STATE_SET:
+                report = SurfaceProgressReport(state: .set, progress: clampedProgress)
+            case GHOSTTY_PROGRESS_STATE_ERROR:
+                report = SurfaceProgressReport(state: .error, progress: clampedProgress)
+            case GHOSTTY_PROGRESS_STATE_INDETERMINATE:
+                report = SurfaceProgressReport(state: .indeterminate, progress: clampedProgress)
+            case GHOSTTY_PROGRESS_STATE_PAUSE:
+                report = SurfaceProgressReport(state: .pause, progress: clampedProgress)
+            default:
+                return false
+            }
             let capturedEvent: SurfaceActionEvent = .progressReport(report)
             DispatchQueue.main.async {
                 runtime.handleAction(surfaceKey: surfaceKey, event: capturedEvent)

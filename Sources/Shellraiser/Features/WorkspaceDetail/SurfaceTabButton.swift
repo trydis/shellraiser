@@ -29,11 +29,7 @@ struct SurfaceTabButton: View {
     /// Color for the tab status dot derived from progress state, completion, or default.
     private var dotFill: AnyShapeStyle {
         if let report = manager.progressBySurfaceId[surface.id] {
-            switch report.state {
-            case .error: return AnyShapeStyle(Color.red)
-            case .pause: return AnyShapeStyle(Color.orange)
-            default: return AnyShapeStyle(Color.accentColor)
-            }
+            return AnyShapeStyle(report.state.tintColor)
         }
         if surface.hasPendingCompletion { return AnyShapeStyle(AppTheme.accentGradient) }
         return AnyShapeStyle(Color.white.opacity(0.2))

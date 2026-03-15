@@ -8,13 +8,7 @@ import SwiftUI
 struct SurfaceProgressBar: View {
     let report: SurfaceProgressReport
 
-    private var color: Color {
-        switch report.state {
-        case .error: return .red
-        case .pause: return .orange
-        default: return .accentColor
-        }
-    }
+    private var color: Color { report.state.tintColor }
 
     /// Resolved percentage value, treating pause-without-progress as 100%.
     private var progress: UInt8? {
