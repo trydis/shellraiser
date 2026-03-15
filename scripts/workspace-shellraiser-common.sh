@@ -68,14 +68,16 @@ resolve_workspace_name() {
     if (($# > 0)); then
         workspace_name="$*"
     else
-        printf '%s' "Workspace name: "
+        printf '%s' "Workspace name: " >&2
         if ! read -r workspace_name; then
             fail_workspace_name_required
+            return 1
         fi
     fi
 
     if [[ -z "${workspace_name//[[:space:]]/}" ]]; then
         fail_workspace_name_required
+        return 1
     fi
 
     printf '%s\n' "$workspace_name"
