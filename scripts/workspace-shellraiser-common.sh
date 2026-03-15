@@ -38,6 +38,7 @@ resolve_main_repo_root() {
             :
         else
             fail_with_message "Failed to resolve the repository common Git directory."
+            return 1
         fi
     elif common_git_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
         :
@@ -45,6 +46,7 @@ resolve_main_repo_root() {
         repo_root="$(resolve_repo_root)"
         if ! common_git_dir="$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null)"; then
             fail_with_message "Failed to resolve the repository common Git directory."
+            return 1
         fi
         if [[ "$common_git_dir" != /* ]]; then
             common_git_dir="$repo_root/$common_git_dir"
@@ -53,6 +55,7 @@ resolve_main_repo_root() {
 
     if ! cd "$common_git_dir/.." >/dev/null 2>&1; then
         fail_with_message "Failed to resolve the canonical repository root."
+        return 1
     fi
 
     pwd -P
@@ -243,10 +246,12 @@ prepare_workspace_worktree_with_status() {
     if local_branch_exists "$main_repo_root" "$branch_name"; then
         if [[ -z "$existing_worktree_path" ]]; then
             fail_with_message "Branch '$branch_name' already exists but is not checked out at '$worktree_path'."
+            return 1
         fi
 
         if [[ "$existing_worktree_path" != "$worktree_path" ]]; then
             fail_with_message "Branch '$branch_name' is already checked out at '$existing_worktree_path', not '$worktree_path'."
+            return 1
         fi
 
         printf '%s\t%s\texisting\n' "$worktree_path" "$branch_name"
@@ -255,14 +260,17 @@ prepare_workspace_worktree_with_status() {
 
     if [[ -n "$registered_branch" ]]; then
         fail_with_message "Worktree path '$worktree_path' is already registered for '$registered_branch'."
+        return 1
     fi
 
     if [[ -e "$worktree_path" ]]; then
         fail_with_message "Worktree path '$worktree_path' already exists and is not a registered Git worktree."
+        return 1
     fi
 
     if ! git -C "$main_repo_root" worktree add -b "$branch_name" "$worktree_path" main >/dev/null; then
         fail_with_message "Failed to create worktree '$worktree_path' from base branch 'main'."
+        return 1
     fi
 
     printf '%s\t%s\tcreated\n' "$worktree_path" "$branch_name"
