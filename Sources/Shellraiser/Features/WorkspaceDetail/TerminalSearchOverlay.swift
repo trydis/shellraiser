@@ -75,9 +75,7 @@ struct TerminalSearchOverlay: View {
             .padding(.trailing, 6)
         }
         .frame(height: 30)
-        .background(
-            Color(nsColor: NSColor(calibratedRed: 0.16, green: 0.17, blue: 0.22, alpha: 0.97))
-        )
+        .background(AppTheme.panelGradient)
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
