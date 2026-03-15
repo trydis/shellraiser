@@ -277,6 +277,7 @@ struct PaneLeafView: View {
                         GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
                     }
                 )
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.trailing, 20)
                 .padding(.top, 14)
