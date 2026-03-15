@@ -285,16 +285,35 @@ public struct FileTmuxShimStateStore: TmuxShimStateStoring {
     /// Executes body under an exclusive `flock` advisory lock so concurrent shim processes
     /// cannot interleave their load–modify–save cycles. The lock file is a sibling of the
     /// state file. If the lock file cannot be opened, the body is executed without a lock.
+    /// Waits up to 5 seconds for lock acquisition before proceeding unlocked with a warning.
     public func transact(_ body: (inout TmuxShimState) throws -> Void) throws {
         let directoryURL = stateURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let lockPath = directoryURL.appendingPathComponent(".tmux-shim.lock").path
         let fd = open(lockPath, O_CREAT | O_RDWR, 0o644)
         defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
-        if fd >= 0 { flock(fd, LOCK_EX) }
+        if fd >= 0 {
+            acquireAdvisoryLock(fd: fd)
+        }
         var state = try load()
         try body(&state)
         try save(state)
+    }
+
+    /// Attempts to acquire an exclusive advisory lock with non-blocking retries.
+    /// Retries every 100 ms for up to 5 seconds. Logs a warning and returns without
+    /// the lock if acquisition times out (e.g. a hung lock holder stalls the shim).
+    private func acquireAdvisoryLock(fd: Int32) {
+        let retryInterval = 0.1
+        let maxAttempts = Int(5.0 / retryInterval)
+        for _ in 0..<maxAttempts {
+            if flock(fd, LOCK_EX | LOCK_NB) == 0 {
+                return
+            }
+            guard errno == EWOULDBLOCK else { return }
+            Thread.sleep(forTimeInterval: retryInterval)
+        }
+        NSLog("tmux-shim: state lock timed out after 5 s; proceeding without lock")
     }
 }
 
@@ -384,7 +403,10 @@ public struct TmuxShimCLI {
                 remaining.removeFirst()
                 return (socketName, "__version__", [])
             default:
-                return (socketName, remaining.first, Array(remaining.dropFirst()))
+                // Skip unrecognized global flags (e.g. -u for UTF-8 mode, -2 for 256-color).
+                // Real tmux parses these before the command name; treating them as the command
+                // name breaks invocations like `tmux -u new-session`.
+                remaining.removeFirst()
             }
         }
 
@@ -438,10 +460,7 @@ public struct TmuxShimCLI {
             socketState.sessionsByName[sessionName] = session
             state.setSocketState(socketState, named: socketName)
 
-            if let commandText, !commandText.isEmpty {
-                try controller.sendText(commandText, toSurfaceWithID: created.surface.id)
-                try controller.sendKey(named: "enter", toSurfaceWithID: created.surface.id)
-            }
+            try sendCommandAndEnter(commandText, toSurfaceID: created.surface.id)
 
             outputLine = try renderFormat(
                 outputFormat,
@@ -540,10 +559,7 @@ public struct TmuxShimCLI {
             socketState.sessionsByName[session.name] = session
             state.setSocketState(socketState, named: socketName)
 
-            if let commandText, !commandText.isEmpty {
-                try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
-                try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
-            }
+            try sendCommandAndEnter(commandText, toSurfaceID: createdSurface.id)
 
             outputLine = try renderFormat(
                 outputFormat,
@@ -603,6 +619,10 @@ public struct TmuxShimCLI {
     }
 
     /// Executes `tmux select-layout`.
+    ///
+    /// Intentional no-op: Shellraiser manages its own tiling layout natively and does not
+    /// expose a layout API through scripting. Validating the target is enough to satisfy
+    /// callers that inspect the exit code for errors.
     private func runSelectLayout(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
         var parser = CommandArgumentParser(arguments: arguments)
         let targetName = parser.value(for: "-t")
@@ -655,6 +675,9 @@ public struct TmuxShimCLI {
     }
 
     /// Executes `tmux new-window`.
+    ///
+    /// Implemented as a right-split rather than a true new window so that teammate surfaces
+    /// stay inside the same Shellraiser workspace instead of spawning separate windows.
     private func runNewWindow(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
         var parser = CommandArgumentParser(arguments: arguments)
         let targetName = parser.value(for: "-t")
@@ -689,10 +712,7 @@ public struct TmuxShimCLI {
             socketState.sessionsByName[session.name] = session
             state.setSocketState(socketState, named: socketName)
 
-            if let commandText, !commandText.isEmpty {
-                try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
-                try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
-            }
+            try sendCommandAndEnter(commandText, toSurfaceID: createdSurface.id)
 
             outputLine = try renderFormat(
                 outputFormat,
@@ -777,6 +797,14 @@ public struct TmuxShimCLI {
         return ShellraiserCommandResult()
     }
 
+    /// Sends optional command text followed by an Enter key to one surface.
+    /// Does nothing when `commandText` is nil or empty.
+    private func sendCommandAndEnter(_ commandText: String?, toSurfaceID surfaceID: String) throws {
+        guard let commandText, !commandText.isEmpty else { return }
+        try controller.sendText(commandText, toSurfaceWithID: surfaceID)
+        try controller.sendKey(named: "enter", toSurfaceWithID: surfaceID)
+    }
+
     /// Sends a mixed sequence of text tokens and special keys into one surface.
     private func sendTokens(_ tokens: [String], toSurfaceID surfaceID: String) throws {
         var pendingText: [String] = []
@@ -838,7 +866,8 @@ public struct TmuxShimCLI {
         guard !panes.isEmpty else { return [] }
 
         let allSurfaces = try controller.listSurfaces(workspaceID: nil)
-        let surfaceByID = Dictionary(uniqueKeysWithValues: allSurfaces.map { ($0.id, $0) })
+        // Use uniquingKeysWith to tolerate duplicate IDs from a transient controller race.
+        let surfaceByID = Dictionary(allSurfaces.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
 
         return try panes.map { pane in
             try renderFormat(format, session: session, pane: pane, surface: surfaceByID[pane.surfaceId])
@@ -887,7 +916,10 @@ public struct TmuxShimCLI {
         let surfaceIDs = Set(surfaces.map(\.id))
 
         for (name, session) in cleaned.sessionsByName {
-            guard workspaceIDs.contains(session.workspaceId) else {
+            // Owned sessions are tied to their workspace lifecycle: if the workspace is gone,
+            // the entire session is stale. Unowned sessions (attached to an existing workspace)
+            // survive workspace disappearance and are pruned at the individual surface level.
+            if session.ownsWorkspace && !workspaceIDs.contains(session.workspaceId) {
                 cleaned.sessionsByName.removeValue(forKey: name)
                 continue
             }
@@ -963,11 +995,14 @@ public struct TmuxShimCLI {
                 .map(String.init)
                 .first ?? rawTarget
             guard let session = socketState.sessionsByName[sessionName] else {
-                throw ShellraiserControlError("Unknown session: \(rawTarget)")
+                throw ShellraiserControlError("Unknown session: \(sessionName)")
             }
             return session
         }
 
+        if socketState.sessionsByName.isEmpty {
+            throw ShellraiserControlError("No sessions exist")
+        }
         guard socketState.sessionsByName.count == 1, let session = socketState.sessionsByName.values.first else {
             throw ShellraiserControlError("Target is required when more than one session exists")
         }

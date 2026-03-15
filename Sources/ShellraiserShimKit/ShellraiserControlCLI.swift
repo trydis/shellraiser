@@ -226,9 +226,14 @@ struct CommandArgumentParser {
     }
 
     /// Consumes one named option value when present.
+    /// When the flag is the last token with no following value, the flag is still consumed
+    /// to avoid leaving it in `remaining` and causing confusing "unexpected arguments" errors.
     mutating func value(for name: String) -> String? {
         guard let index = remaining.firstIndex(of: name) else { return nil }
-        guard remaining.indices.contains(index + 1) else { return nil }
+        guard remaining.indices.contains(index + 1) else {
+            remaining.remove(at: index)
+            return nil
+        }
         let value = remaining[index + 1]
         remaining.removeSubrange(index...(index + 1))
         return value

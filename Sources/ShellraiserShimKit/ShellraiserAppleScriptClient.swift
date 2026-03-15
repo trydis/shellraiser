@@ -110,7 +110,8 @@ public struct ShellraiserAppleScriptClient: ShellraiserControlling {
         return ShellraiserWorkspaceCreation(workspace: workspace, surface: surface)
     }
 
-    /// Splits one existing surface and returns the new sibling surface snapshot.
+    /// Splits one existing surface and returns the new sibling surface snapshot,
+    /// including the workspace context inherited from the source terminal.
     public func splitSurface(
         id: String,
         direction: ShellraiserSplitDirection,
@@ -131,18 +132,39 @@ public struct ShellraiserAppleScriptClient: ShellraiserControlling {
                         set initial working directory of config to cwdText
                     end if
                     set createdTerminal to split terminal targetTerminal direction __SPLIT_DIRECTION__ with configuration config
-                    return (id of createdTerminal) & us & (title of createdTerminal) & us & (working directory of createdTerminal)
+
+                    set wsID to ""
+                    set wsName to ""
+                    set foundWS to false
+                    repeat with ws in workspaces
+                        repeat with tabItem in tabs of ws
+                            repeat with t in terminals of tabItem
+                                if (id of t) is (id of targetTerminal) then
+                                    set wsID to id of ws
+                                    set wsName to name of ws
+                                    set foundWS to true
+                                    exit repeat
+                                end if
+                            end repeat
+                            if foundWS then exit repeat
+                        end repeat
+                        if foundWS then exit repeat
+                    end repeat
+
+                    return (id of createdTerminal) & us & (title of createdTerminal) & us & (working directory of createdTerminal) & us & wsID & us & wsName
                 end tell
             end run
             """.replacingOccurrences(of: "__SPLIT_DIRECTION__", with: directionLiteral),
             arguments: [id, workingDirectory ?? ""]
         )
 
-        let fields = parseFields(output, expectedCount: 3)
+        let fields = parseFields(output, expectedCount: 5)
         return ShellraiserSurfaceSnapshot(
             id: fields[0],
             title: fields[1],
-            workingDirectory: fields[2]
+            workingDirectory: fields[2],
+            workspaceId: fields[3].isEmpty ? nil : fields[3],
+            workspaceName: fields[4].isEmpty ? nil : fields[4]
         )
     }
 

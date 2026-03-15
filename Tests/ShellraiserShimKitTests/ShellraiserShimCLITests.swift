@@ -636,7 +636,7 @@ final class ShellraiserShimCLITests: XCTestCase {
     /// Verifies split AppleScript embeds the direction as an enumeration literal.
     func testAppleScriptClientEmbedsSplitDirectionLiteral() throws {
         let runner = CapturingAppleScriptRunner(
-            result: "surface-2\u{1F}Tools\u{1F}/tmp/tools"
+            result: "surface-2\u{1F}Tools\u{1F}/tmp/tools\u{1F}workspace-1\u{1F}Demo"
         )
         let client = ShellraiserAppleScriptClient(
             runner: runner,
@@ -647,6 +647,41 @@ final class ShellraiserShimCLITests: XCTestCase {
 
         XCTAssertTrue(runner.lastScript?.contains("direction right") == true)
         XCTAssertFalse(runner.lastScript?.contains("direction splitDirection") == true)
+    }
+
+    /// Verifies `splitSurface` returns workspace metadata embedded in the AppleScript result.
+    func testAppleScriptClientSplitSurfaceReturnsWorkspaceContext() throws {
+        let runner = CapturingAppleScriptRunner(
+            result: "surface-2\u{1F}Tools\u{1F}/tmp/tools\u{1F}workspace-1\u{1F}Demo"
+        )
+        let client = ShellraiserAppleScriptClient(
+            runner: runner,
+            applicationName: "Shellraiser"
+        )
+
+        let surface = try client.splitSurface(id: "surface-1", direction: .down, workingDirectory: nil)
+
+        XCTAssertEqual(surface.id, "surface-2")
+        XCTAssertEqual(surface.workspaceId, "workspace-1")
+        XCTAssertEqual(surface.workspaceName, "Demo")
+    }
+
+    /// Verifies `splitSurface` gracefully returns nil workspace context when the AppleScript
+    /// returns empty workspace fields (e.g. terminal not found in any workspace).
+    func testAppleScriptClientSplitSurfaceToleratesEmptyWorkspaceFields() throws {
+        let runner = CapturingAppleScriptRunner(
+            result: "surface-2\u{1F}Tools\u{1F}/tmp/tools\u{1F}\u{1F}"
+        )
+        let client = ShellraiserAppleScriptClient(
+            runner: runner,
+            applicationName: "Shellraiser"
+        )
+
+        let surface = try client.splitSurface(id: "surface-1", direction: .right, workingDirectory: nil)
+
+        XCTAssertEqual(surface.id, "surface-2")
+        XCTAssertNil(surface.workspaceId)
+        XCTAssertNil(surface.workspaceName)
     }
 
     /// Verifies focus AppleScript uses the command form expected by the scripting dictionary.
@@ -661,6 +696,345 @@ final class ShellraiserShimCLITests: XCTestCase {
 
         XCTAssertTrue(runner.lastScript?.contains("focus terminal targetTerminal") == true)
         XCTAssertFalse(runner.lastScript?.contains("focus targetTerminal") == true)
+    }
+
+    // MARK: - kill-pane
+
+    /// Verifies `tmux kill-pane` closes the backing surface and removes the pane from state.
+    func testTmuxKillPaneClosesSurfaceAndRemovesPaneFromSession() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                nextPaneOrdinal: 3,
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [
+                            TmuxShimPane(paneId: "%1", surfaceId: "surface-1"),
+                            TmuxShimPane(paneId: "%2", surfaceId: "surface-2")
+                        ],
+                        focusedPaneId: "%2"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["kill-pane", "-t", "%2"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedSurfaceIDs, ["surface-2"])
+        let panes = try store.load().sessionsByName["coord"]?.panes
+        XCTAssertEqual(panes?.map(\.paneId), ["%1"])
+    }
+
+    /// Verifies `tmux kill-pane` on the last pane removes the entire session from state.
+    func testTmuxKillPaneOnLastPaneRemovesSession() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["kill-pane", "-t", "%1"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedSurfaceIDs, ["surface-1"])
+        XCTAssertTrue(try store.load().sessionsByName.isEmpty)
+    }
+
+    // MARK: - kill-session (owned workspace)
+
+    /// Verifies `tmux kill-session` closes the backing workspace when the session owns it.
+    func testTmuxKillSessionClosesOwnedWorkspace() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1",
+                        ownsWorkspace: true
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["kill-session", "-t", "coord"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedWorkspaceIDs, ["workspace-1"])
+        XCTAssertTrue(controller.closedSurfaceIDs.isEmpty)
+        XCTAssertTrue(try store.load().sessionsByName.isEmpty)
+    }
+
+    // MARK: - send-keys -l (literal mode)
+
+    /// Verifies `tmux send-keys -l` sends all tokens as raw text without key name translation.
+    func testTmuxSendKeysLiteralModeSendsEntireTokenSequenceAsText() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["send-keys", "-t", "coord", "-l", "Enter", "C-c"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(controller.sentKeyEvents.isEmpty, "Literal mode must not emit key events")
+        XCTAssertEqual(controller.sentTextEvents.count, 1)
+        XCTAssertEqual(controller.sentTextEvents.first?.1, "Enter C-c")
+    }
+
+    // MARK: - send-keys with zero tokens
+
+    /// Verifies `tmux send-keys` with no token arguments returns an error.
+    func testTmuxSendKeysWithNoTokensReturnsError() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["send-keys", "-t", "coord"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertFalse(result.standardError.isEmpty)
+    }
+
+    // MARK: - new-session already-exists guard
+
+    /// Verifies `tmux new-session` returns an error when a session with the same name exists.
+    func testTmuxNewSessionAlreadyExistsReturnsError() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["new-session", "-d", "-s", "coord"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.standardError.contains("coord"))
+    }
+
+    // MARK: - Unsupported command
+
+    /// Verifies an unrecognized tmux command returns a non-zero exit code and useful error text.
+    func testTmuxUnsupportedCommandReturnsError() {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["attach-session"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.standardError.lowercased().contains("unsupported"))
+    }
+
+    // MARK: - resolveSession error paths
+
+    /// Verifies `resolveSession` reports "No sessions exist" when the state is empty and no target is given.
+    func testTmuxResolveSessionReportsNoSessionsWhenStateIsEmpty() {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["list-panes"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.standardError.contains("No sessions"))
+    }
+
+    /// Verifies `resolveSession` reports only the session name (not a colon-qualified target) in error messages.
+    func testTmuxResolveSessionErrorUsesSessionNameNotFullTarget() {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["list-panes", "-t", "mysession:badwindow"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.standardError.contains("mysession"))
+        XCTAssertFalse(result.standardError.contains("mysession:badwindow"))
+    }
+
+    // MARK: - Unknown global tmux flags
+
+    /// Verifies that unrecognized global flags like `-u` are skipped rather than treated as the command name.
+    func testTmuxUnknownGlobalFlagIsSkippedBeforeCommand() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["-u", "new-session", "-d", "-s", "coord"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(try store.load().sessionsByName.keys.sorted(), ["coord"])
+    }
+
+    // MARK: - ShellraiserControlCLI additional commands
+
+    /// Verifies `shellraiserctl split` emits the created surface identifiers.
+    func testShellraiserControlCLISplitPrintsSurfaceIdentifiers() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["split", "--surface", "surface-1", "right"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("surface_id="))
+    }
+
+    /// Verifies `shellraiserctl focus-surface` succeeds and calls the controller.
+    func testShellraiserControlCLIFocusSurfaceCallsController() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["focus-surface", "--surface", "surface-1"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.focusedSurfaceIDs, ["surface-1"])
+    }
+
+    /// Verifies `shellraiserctl send-text` delivers text to the named surface.
+    func testShellraiserControlCLISendTextDeliversText() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["send-text", "--surface", "surface-1", "hello world"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.sentTextEvents.first?.1, "hello world")
+    }
+
+    /// Verifies `shellraiserctl send-key` delivers the named key to the surface.
+    func testShellraiserControlCLISendKeyDeliversKey() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["send-key", "--surface", "surface-1", "enter"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.sentKeyEvents.first?.1, "enter")
+    }
+
+    /// Verifies `shellraiserctl list-workspaces` emits tab-delimited workspace rows.
+    func testShellraiserControlCLIListWorkspacesPrintsRows() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["list-workspaces"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("workspace-1"))
+    }
+
+    /// Verifies `shellraiserctl list-surfaces` emits tab-delimited surface rows.
+    func testShellraiserControlCLIListSurfacesPrintsRows() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["list-surfaces"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("surface-1"))
+    }
+
+    /// Verifies `shellraiserctl close-surface` calls the controller close method.
+    func testShellraiserControlCLICloseSurfaceCallsController() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["close-surface", "--surface", "surface-1"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedSurfaceIDs, ["surface-1"])
+    }
+
+    /// Verifies `shellraiserctl close-workspace` calls the controller close method.
+    func testShellraiserControlCLICloseWorkspaceCallsController() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["close-workspace", "--workspace", "workspace-1"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedWorkspaceIDs, ["workspace-1"])
+    }
+
+    /// Verifies `shellraiserctl identify` emits workspace and surface counts.
+    func testShellraiserControlCLIIdentifyEmitsCounts() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["identify"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("workspace_count="))
+        XCTAssertTrue(result.standardOutput.contains("surface_count="))
+    }
+
+    /// Verifies `shellraiserctl help` prints usage text.
+    func testShellraiserControlCLIHelpPrintsUsage() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["help"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("Usage:"))
+    }
+
+    /// Verifies `shellraiserctl` with an unknown command returns an error.
+    func testShellraiserControlCLIUnknownCommandReturnsError() {
+        let controller = MockShellraiserController()
+        let cli = ShellraiserControlCLI(controller: controller)
+
+        let result = cli.run(arguments: ["fly-to-moon"])
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertFalse(result.standardError.isEmpty)
     }
 }
 

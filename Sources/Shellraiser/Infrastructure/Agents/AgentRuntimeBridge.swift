@@ -178,13 +178,16 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         do {
             try process.run()
+            // Read output before waitUntilExit to avoid a pipe-buffer deadlock: if the
+            // subprocess fills the buffer before exiting it blocks on write, which prevents
+            // it from exiting, which prevents waitUntilExit from returning.
+            let data = stdout.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             guard process.terminationStatus == 0 else {
                 cachedExecutablePaths[name] = nil
                 return nil
             }
 
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
             let resolved = String(decoding: data, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let value = resolved.isEmpty ? nil : resolved
