@@ -315,8 +315,10 @@ prepare_workspace_worktree() {
     IFS=$'\t' read -r worktree_path branch_name worktree_status < <(
         prepare_workspace_worktree_with_status "$@"
     )
-    [[ -n "$worktree_path" && -n "$branch_name" && -n "$worktree_status" ]] \
-        || fail_with_message "Failed to resolve the workspace worktree."
+    [[ -n "$worktree_path" && -n "$branch_name" && -n "$worktree_status" ]] || {
+        fail_with_message "Failed to resolve the workspace worktree."
+        return 1
+    }
 
     printf '%s\t%s\n' "$worktree_path" "$branch_name"
 }
