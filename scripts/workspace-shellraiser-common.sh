@@ -318,14 +318,17 @@ bootstrap_ghostty_for_worktree() {
         git submodule update --init --recursive ghostty
     ); then
         fail_with_message "Failed to initialize the 'ghostty' submodule in '$worktree_root'."
+        return 1
     fi
 
     if [[ ! -d "$ghostty_root" ]]; then
         fail_with_message "Ghostty submodule directory '$ghostty_root' was not created."
+        return 1
     fi
 
     if ! command -v zig >/dev/null 2>&1; then
         fail_with_message "Required command 'zig' was not found in PATH."
+        return 1
     fi
 
     printf 'Building Ghostty XCFramework in %s\n' "$ghostty_root"
@@ -338,6 +341,7 @@ bootstrap_ghostty_for_worktree() {
             -Doptimize=ReleaseFast
     ); then
         fail_with_message "Failed to build Ghostty XCFramework in '$ghostty_root'."
+        return 1
     fi
 }
 
