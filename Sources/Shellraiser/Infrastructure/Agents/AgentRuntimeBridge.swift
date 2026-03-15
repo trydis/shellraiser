@@ -7,6 +7,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
     let runtimeDirectory: URL
     let binDirectory: URL
+    let teamBinDirectory: URL
     let zshShimDirectory: URL
     let eventLogURL: URL
 
@@ -33,6 +34,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         self.fileManager = fileManager
         self.runtimeDirectory = rootURL
         self.binDirectory = rootURL.appendingPathComponent("bin", isDirectory: true)
+        self.teamBinDirectory = rootURL.appendingPathComponent("team-bin", isDirectory: true)
         self.zshShimDirectory = rootURL.appendingPathComponent("zsh", isDirectory: true)
         self.eventLogURL = rootURL.appendingPathComponent("agent-completions.log")
         self.tmuxShimExecutableURLOverride = tmuxShimExecutableURLOverride
@@ -43,6 +45,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     func prepareRuntimeSupport() {
         do {
             try fileManager.createDirectory(at: binDirectory, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: teamBinDirectory, withIntermediateDirectories: true)
             try fileManager.createDirectory(at: zshShimDirectory, withIntermediateDirectories: true)
 
             if !fileManager.fileExists(atPath: eventLogURL.path) {
@@ -61,11 +64,15 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 named: "codex",
                 contents: codexWrapperContents
             )
+            try removeExecutableIfPresent(named: "tmux", in: binDirectory)
             if let tmuxShimExecutableURL = resolvedTmuxShimExecutableURL() {
                 try writeExecutable(
                     named: "tmux",
-                    contents: tmuxWrapperContents(realShimPath: tmuxShimExecutableURL.path)
+                    contents: tmuxWrapperContents(realShimPath: tmuxShimExecutableURL.path),
+                    in: teamBinDirectory
                 )
+            } else {
+                try removeExecutableIfPresent(named: "tmux", in: teamBinDirectory)
             }
             try writeTextFile(
                 at: zshShimDirectory.appendingPathComponent(".zshenv"),
@@ -119,6 +126,11 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         if let codexPath = resolveExecutable(named: "codex", searchPath: inheritedPath) {
             environment["SHELLRAISER_REAL_CODEX"] = codexPath
+        }
+
+        let tmuxWrapperURL = teamBinDirectory.appendingPathComponent("tmux")
+        if fileManager.isExecutableFile(atPath: tmuxWrapperURL.path) {
+            environment["SHELLRAISER_TEAM_BIN"] = teamBinDirectory.path
         }
 
         return environment
@@ -225,13 +237,21 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     }
 
     /// Writes an executable helper script if contents have changed.
-    private func writeExecutable(named name: String, contents: String) throws {
-        let fileURL = binDirectory.appendingPathComponent(name)
+    private func writeExecutable(named name: String, contents: String, in directoryURL: URL? = nil) throws {
+        let targetDirectoryURL = directoryURL ?? binDirectory
+        let fileURL = targetDirectoryURL.appendingPathComponent(name)
         try writeTextFile(at: fileURL, contents: contents)
         try fileManager.setAttributes(
             [.posixPermissions: 0o755],
             ofItemAtPath: fileURL.path
         )
+    }
+
+    /// Removes one managed executable if it exists at the supplied runtime path.
+    private func removeExecutableIfPresent(named name: String, in directoryURL: URL) throws {
+        let fileURL = directoryURL.appendingPathComponent(name)
+        guard fileManager.fileExists(atPath: fileURL.path) else { return }
+        try fileManager.removeItem(at: fileURL)
     }
 
     /// Writes a text file only when contents have changed.
@@ -320,6 +340,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
+        if [ -n "${SHELLRAISER_TEAM_BIN:-}" ]; then
+            export PATH="${SHELLRAISER_TEAM_BIN}:${PATH}"
+        fi
 
         settings_file="${TMPDIR:-/tmp}/schmux-claude-${surface}-$$.json"
         cleanup() {

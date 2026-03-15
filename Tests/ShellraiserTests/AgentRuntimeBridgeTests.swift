@@ -104,8 +104,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(helperContents.contains("phase=\"session\""))
     }
 
-    /// Verifies the runtime bridge installs a tmux wrapper when a shim binary is provided.
-    func testPrepareRuntimeSupportWritesTmuxWrapperWhenShimIsAvailable() throws {
+    /// Verifies the runtime bridge installs a tmux wrapper only for Claude-managed subprocess PATH injection.
+    func testPrepareRuntimeSupportWritesTmuxWrapperIntoTeamBinWhenShimIsAvailable() throws {
         let shimURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("ShellraiserTests-tmux-\(UUID().uuidString)")
         let shimContents = "#!/bin/sh\nexit 0\n"
@@ -127,13 +127,17 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             rootURL: directory,
             tmuxShimExecutableURLOverride: shimURL
         )
-        let wrapperURL = bridge.binDirectory.appendingPathComponent("tmux")
+        let wrapperURL = bridge.teamBinDirectory.appendingPathComponent("tmux")
+        let claudeWrapperURL = bridge.binDirectory.appendingPathComponent("claude")
 
         bridge.prepareRuntimeSupport()
 
         let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
+        let claudeWrapperContents = try String(contentsOf: claudeWrapperURL, encoding: .utf8)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrapperURL.path))
         XCTAssertTrue(wrapperContents.contains(shimURL.path))
         XCTAssertTrue(wrapperContents.contains("SHELLRAISER_REAL_TMUX_SHIM"))
+        XCTAssertTrue(claudeWrapperContents.contains("SHELLRAISER_TEAM_BIN"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bridge.binDirectory.appendingPathComponent("tmux").path))
     }
 }
