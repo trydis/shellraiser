@@ -156,10 +156,14 @@ extension WorkspaceManager {
         if let report {
             progressBySurfaceId[surfaceId] = report
             progressClearTimers[surfaceId]?.invalidate()
+            let generation = (progressTimerGeneration[surfaceId] ?? 0) + 1
+            progressTimerGeneration[surfaceId] = generation
             let timer = Timer(timeInterval: Self.progressAutoClearInterval, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
+                    guard self?.progressTimerGeneration[surfaceId] == generation else { return }
                     self?.progressBySurfaceId.removeValue(forKey: surfaceId)
                     self?.progressClearTimers.removeValue(forKey: surfaceId)
+                    self?.progressTimerGeneration.removeValue(forKey: surfaceId)
                 }
             }
             RunLoop.main.add(timer, forMode: .common)
@@ -171,11 +175,10 @@ extension WorkspaceManager {
 
     /// Returns the progress report for the focused surface of a workspace, if any.
     func focusedSurfaceProgress(workspaceId: UUID) -> SurfaceProgressReport? {
-        guard let workspace = workspace(id: workspaceId),
-              let focusedSurfaceId = workspace.focusedSurfaceId else {
-            return nil
-        }
-        return progressBySurfaceId[focusedSurfaceId]
+        guard let workspace = workspace(id: workspaceId) else { return nil }
+        let surfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId()
+        guard let surfaceId else { return nil }
+        return progressBySurfaceId[surfaceId]
     }
 
     /// Removes any stored progress state and cancels the auto-clear timer for a surface.
@@ -183,6 +186,7 @@ extension WorkspaceManager {
         progressBySurfaceId.removeValue(forKey: surfaceId)
         progressClearTimers[surfaceId]?.invalidate()
         progressClearTimers.removeValue(forKey: surfaceId)
+        progressTimerGeneration.removeValue(forKey: surfaceId)
     }
 
     /// Updates tab title using the current terminal title.
