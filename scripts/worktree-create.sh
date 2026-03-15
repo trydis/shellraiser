@@ -9,6 +9,7 @@ if [[ -n "${BASH_VERSION:-}" ]]; then
     fi
 else
     if [[ -n "${ZSH_VERSION:-}" ]]; then
+        # shellcheck disable=SC2296
         shellraiser_script_path="${(%):-%x}"
     else
         shellraiser_script_path="$0"
