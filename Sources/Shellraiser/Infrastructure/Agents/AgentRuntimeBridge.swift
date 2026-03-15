@@ -11,6 +11,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     let eventLogURL: URL
 
     private let fileManager: FileManager
+    private let tmuxShimExecutableURLOverride: URL?
     private var cachedExecutablePaths: [String: String?] = [:]
 
     /// Creates the bridge rooted in the process temp directory to avoid path escaping issues.
@@ -24,12 +25,17 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     }
 
     /// Creates a bridge rooted in the supplied directory for isolated runtime support.
-    init(rootURL: URL, fileManager: FileManager = .default) {
+    init(
+        rootURL: URL,
+        fileManager: FileManager = .default,
+        tmuxShimExecutableURLOverride: URL? = nil
+    ) {
         self.fileManager = fileManager
         self.runtimeDirectory = rootURL
         self.binDirectory = rootURL.appendingPathComponent("bin", isDirectory: true)
         self.zshShimDirectory = rootURL.appendingPathComponent("zsh", isDirectory: true)
         self.eventLogURL = rootURL.appendingPathComponent("agent-completions.log")
+        self.tmuxShimExecutableURLOverride = tmuxShimExecutableURLOverride
         prepareRuntimeSupport()
     }
 
@@ -55,6 +61,12 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 named: "codex",
                 contents: codexWrapperContents
             )
+            if let tmuxShimExecutableURL = resolvedTmuxShimExecutableURL() {
+                try writeExecutable(
+                    named: "tmux",
+                    contents: tmuxWrapperContents(realShimPath: tmuxShimExecutableURL.path)
+                )
+            }
             try writeTextFile(
                 at: zshShimDirectory.appendingPathComponent(".zshenv"),
                 contents: zshEnvContents
@@ -146,6 +158,70 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             cachedExecutablePaths[name] = nil
             return nil
         }
+    }
+
+    /// Resolves the tmux shim executable that should be exposed only inside Shellraiser-managed terminals.
+    private func resolvedTmuxShimExecutableURL() -> URL? {
+        if let override = tmuxShimExecutableURLOverride,
+           fileManager.isExecutableFile(atPath: override.path) {
+            return override
+        }
+
+        if let environmentOverride = ProcessInfo.processInfo.environment["SHELLRAISER_TMUX_SHIM"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !environmentOverride.isEmpty,
+           fileManager.isExecutableFile(atPath: environmentOverride) {
+            return URL(fileURLWithPath: environmentOverride)
+        }
+
+        let seedURLs = candidateTmuxShimSearchRoots()
+        let candidateRelativePaths = [
+            ".build/arm64-apple-macosx/debug/tmux",
+            ".build/arm64-apple-macosx/release/tmux",
+            ".build/debug/tmux",
+            ".build/release/tmux"
+        ]
+
+        for seedURL in seedURLs {
+            for candidateRelativePath in candidateRelativePaths {
+                let candidateURL = seedURL.appendingPathComponent(candidateRelativePath)
+                if fileManager.isExecutableFile(atPath: candidateURL.path) {
+                    return candidateURL
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Returns likely repository roots that may contain a built tmux shim binary.
+    private func candidateTmuxShimSearchRoots() -> [URL] {
+        var seenPaths = Set<String>()
+        var roots: [URL] = []
+
+        func appendAncestors(of url: URL?) {
+            guard var currentURL = url?.standardizedFileURL else { return }
+
+            while true {
+                let path = currentURL.path
+                if seenPaths.insert(path).inserted {
+                    roots.append(currentURL)
+                }
+
+                let parentURL = currentURL.deletingLastPathComponent()
+                guard parentURL.path != currentURL.path else { break }
+                currentURL = parentURL
+            }
+        }
+
+        appendAncestors(of: Bundle.main.bundleURL)
+        appendAncestors(of: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+
+        if let executablePath = ProcessInfo.processInfo.arguments.first {
+            appendAncestors(of: URL(fileURLWithPath: executablePath))
+        }
+
+        return roots
     }
 
     /// Writes an executable helper script if contents have changed.
@@ -533,6 +609,23 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         "$helper" codex "$surface" exited || true
         exit "$status"
         """#
+    }
+
+    /// tmux wrapper that forwards to the Shellraiser-specific shim binary when available.
+    private func tmuxWrapperContents(realShimPath: String) -> String {
+        #"""
+        #!/bin/sh
+        set -eu
+
+        real="${SHELLRAISER_REAL_TMUX_SHIM:-__REAL_TMUX_SHIM__}"
+        if [ -z "$real" ] || [ ! -x "$real" ]; then
+            echo "Shellraiser could not resolve the tmux shim binary." >&2
+            exit 127
+        fi
+
+        exec "$real" "$@"
+        """#
+            .replacingOccurrences(of: "__REAL_TMUX_SHIM__", with: realShimPath)
     }
 
     /// zsh shim that sources the user's original `.zshenv` and reapplies Shellraiser runtime vars.

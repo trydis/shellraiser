@@ -103,4 +103,37 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertFalse(helperContents.contains("/usr/bin/python3"))
         XCTAssertTrue(helperContents.contains("phase=\"session\""))
     }
+
+    /// Verifies the runtime bridge installs a tmux wrapper when a shim binary is provided.
+    func testPrepareRuntimeSupportWritesTmuxWrapperWhenShimIsAvailable() throws {
+        let shimURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShellraiserTests-tmux-\(UUID().uuidString)")
+        let shimContents = "#!/bin/sh\nexit 0\n"
+        FileManager.default.createFile(atPath: shimURL.path, contents: Data(shimContents.utf8))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shimURL.path)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: shimURL)
+        }
+
+        let sanitizedTestName = #function
+            .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "-", options: .regularExpression)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShellraiserTests-\(sanitizedTestName)-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let bridge = AgentRuntimeBridge(
+            rootURL: directory,
+            tmuxShimExecutableURLOverride: shimURL
+        )
+        let wrapperURL = bridge.binDirectory.appendingPathComponent("tmux")
+
+        bridge.prepareRuntimeSupport()
+
+        let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrapperURL.path))
+        XCTAssertTrue(wrapperContents.contains(shimURL.path))
+        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_REAL_TMUX_SHIM"))
+    }
 }
