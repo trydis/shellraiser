@@ -31,10 +31,13 @@ public struct OsaScriptRunner: AppleScriptRunning {
         }
         inputPipe.fileHandleForWriting.closeFile()
 
-        process.waitUntilExit()
-
+        // Read output before waitUntilExit to avoid a deadlock: if the subprocess fills
+        // the pipe buffer before exiting it blocks on write, which prevents it from
+        // exiting, which prevents waitUntilExit from returning.
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+        process.waitUntilExit()
         let output = String(decoding: outputData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         let error = String(decoding: errorData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
 
