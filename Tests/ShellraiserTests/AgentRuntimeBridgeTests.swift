@@ -182,7 +182,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             contentsOf: surfaceTeamBinDirectory.appendingPathComponent("tmux"),
             encoding: .utf8
         )
-        XCTAssertTrue(wrapperContents.contains("surface=\"${SHELLRAISER_SURFACE_ID:-\(surfaceID.uuidString)}\""))
+        XCTAssertTrue(wrapperContents.contains("surface=\"${SHELLRAISER_SURFACE_ID:-'\(surfaceID.uuidString)'}\""))
         XCTAssertTrue(wrapperContents.contains("export SHELLRAISER_SURFACE_ID=\"$surface\""))
     }
 

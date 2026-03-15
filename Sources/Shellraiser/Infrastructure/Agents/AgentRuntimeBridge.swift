@@ -678,12 +678,16 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
     /// tmux wrapper that forwards to the Shellraiser-specific shim binary when available.
     private func tmuxWrapperContents(realShimPath: String, bakedSurfaceID: String? = nil) -> String {
-        #"""
+        // Both values are embedded as single-quoted literals so that spaces, dollar signs, or
+        // other shell metacharacters in the path cannot break the script or inject commands.
+        let quotedPath = "'" + realShimPath.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let quotedSurfaceID = "'" + (bakedSurfaceID ?? "").replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return """
         #!/bin/sh
         set -eu
 
-        real="${SHELLRAISER_REAL_TMUX_SHIM:-__REAL_TMUX_SHIM__}"
-        surface="${SHELLRAISER_SURFACE_ID:-__BAKED_SURFACE_ID__}"
+        real="${SHELLRAISER_REAL_TMUX_SHIM:-\(quotedPath)}"
+        surface="${SHELLRAISER_SURFACE_ID:-\(quotedSurfaceID)}"
         if [ -z "$real" ] || [ ! -x "$real" ]; then
             echo "Shellraiser could not resolve the tmux shim binary." >&2
             exit 127
@@ -694,9 +698,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         fi
 
         exec "$real" "$@"
-        """#
-            .replacingOccurrences(of: "__REAL_TMUX_SHIM__", with: realShimPath)
-            .replacingOccurrences(of: "__BAKED_SURFACE_ID__", with: bakedSurfaceID ?? "")
+        """
     }
 
     /// zsh shim that sources the user's original `.zshenv` and reapplies Shellraiser runtime vars.
