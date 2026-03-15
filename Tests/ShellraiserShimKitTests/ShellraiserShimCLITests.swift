@@ -574,6 +574,21 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertFalse(runner.lastScript?.contains("repeat with term in terminals of ws") == true)
     }
 
+    /// Verifies surface lookup matches UUID-like identifiers case-insensitively.
+    func testAppleScriptClientResolvesSurfaceIdentifiersCaseInsensitively() throws {
+        let runner = CapturingAppleScriptRunner(
+            result: "abcd1234-ef56-7890-abcd-ef1234567890\u{1F}Demo\u{1F}/tmp\u{1F}workspace-1\u{1F}Demo"
+        )
+        let client = ShellraiserAppleScriptClient(
+            runner: runner,
+            applicationName: "Shellraiser"
+        )
+
+        let surface = try client.surface(withID: "ABCD1234-EF56-7890-ABCD-EF1234567890")
+
+        XCTAssertEqual(surface?.id, "abcd1234-ef56-7890-abcd-ef1234567890")
+    }
+
     /// Verifies split AppleScript embeds the direction as an enumeration literal.
     func testAppleScriptClientEmbedsSplitDirectionLiteral() throws {
         let runner = CapturingAppleScriptRunner(

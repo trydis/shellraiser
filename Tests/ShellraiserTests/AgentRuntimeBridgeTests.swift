@@ -167,13 +167,16 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             tmuxShimExecutableURLOverride: shimURL,
             allowsTmuxShimDiscovery: false
         )
+        let surfaceID = UUID(uuidString: "8F58EFAB-A44A-409E-8666-5A8786BB9782")!
         let environment = bridge.environment(
-            for: UUID(),
+            for: surfaceID,
             shellPath: "/bin/zsh",
             baseEnvironment: ["PATH": "/usr/bin:/bin"]
         )
+        let surfaceTeamBinDirectory = bridge.teamBinDirectory
+            .appendingPathComponent(surfaceID.uuidString, isDirectory: true)
 
-        XCTAssertEqual(environment["SHELLRAISER_TEAM_BIN"], bridge.teamBinDirectory.path)
+        XCTAssertEqual(environment["SHELLRAISER_TEAM_BIN"], surfaceTeamBinDirectory.path)
         XCTAssertEqual(environment["SHELLRAISER_WRAPPER_DEBUG_LOG"], bridge.debugLogURL.path)
         XCTAssertEqual(
             environment["SHELLRAISER_CLAUDE_DEBUG_LOG"],
@@ -181,8 +184,14 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         )
         XCTAssertEqual(
             environment["PATH"],
-            "\(bridge.binDirectory.path):\(bridge.teamBinDirectory.path):/usr/bin:/bin"
+            "\(bridge.binDirectory.path):\(surfaceTeamBinDirectory.path):/usr/bin:/bin"
         )
+        let wrapperContents = try String(
+            contentsOf: surfaceTeamBinDirectory.appendingPathComponent("tmux"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(wrapperContents.contains("surface=\"${SHELLRAISER_SURFACE_ID:-\(surfaceID.uuidString)}\""))
+        XCTAssertTrue(wrapperContents.contains("export SHELLRAISER_SURFACE_ID=\"$surface\""))
     }
 
     /// Verifies zsh bootstrap files preserve the tmux shim path and exported team-bin metadata.

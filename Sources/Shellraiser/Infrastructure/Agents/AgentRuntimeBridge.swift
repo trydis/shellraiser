@@ -113,9 +113,10 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         var environment = baseEnvironment
         let inheritedPath = environment["PATH"] ?? ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let tmuxWrapperURL = teamBinDirectory.appendingPathComponent("tmux")
+        let surfaceTeamBinDirectory = prepareSurfaceTeamBinDirectory(for: surfaceId)
+        let tmuxWrapperURL = surfaceTeamBinDirectory.appendingPathComponent("tmux")
         let pathPrefixes = fileManager.isExecutableFile(atPath: tmuxWrapperURL.path)
-            ? [binDirectory.path, teamBinDirectory.path]
+            ? [binDirectory.path, surfaceTeamBinDirectory.path]
             : [binDirectory.path]
         let wrapperPath = (pathPrefixes + [inheritedPath])
             .filter { !$0.isEmpty }
@@ -143,10 +144,36 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         }
 
         if fileManager.isExecutableFile(atPath: tmuxWrapperURL.path) {
-            environment["SHELLRAISER_TEAM_BIN"] = teamBinDirectory.path
+            environment["SHELLRAISER_TEAM_BIN"] = surfaceTeamBinDirectory.path
         }
 
         return environment
+    }
+
+    /// Creates one per-surface team-bin directory so wrappers can carry stable terminal identity.
+    private func prepareSurfaceTeamBinDirectory(for surfaceId: UUID) -> URL {
+        let directory = teamBinDirectory.appendingPathComponent(surfaceId.uuidString, isDirectory: true)
+
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+            if let tmuxShimExecutableURL = resolvedTmuxShimExecutableURL() {
+                try writeExecutable(
+                    named: "tmux",
+                    contents: tmuxWrapperContents(
+                        realShimPath: tmuxShimExecutableURL.path,
+                        bakedSurfaceID: surfaceId.uuidString
+                    ),
+                    in: directory
+                )
+            } else {
+                try removeExecutableIfPresent(named: "tmux", in: directory)
+            }
+        } catch {
+            NSLog("Failed to prepare Shellraiser surface tmux wrapper: \(error)")
+        }
+
+        return directory
     }
 
     /// Returns the per-surface Claude debug log path used for wrapper instrumentation.
@@ -697,28 +724,35 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     }
 
     /// tmux wrapper that forwards to the Shellraiser-specific shim binary when available.
-    private func tmuxWrapperContents(realShimPath: String) -> String {
+    private func tmuxWrapperContents(realShimPath: String, bakedSurfaceID: String? = nil) -> String {
         #"""
         #!/bin/sh
         set -eu
 
         real="${SHELLRAISER_REAL_TMUX_SHIM:-__REAL_TMUX_SHIM__}"
+        surface="${SHELLRAISER_SURFACE_ID:-__BAKED_SURFACE_ID__}"
         if [ -z "$real" ] || [ ! -x "$real" ]; then
             echo "Shellraiser could not resolve the tmux shim binary." >&2
             exit 127
         fi
 
         if [ -n "${SHELLRAISER_WRAPPER_DEBUG_LOG:-}" ]; then
-            printf '%s\ttmux-wrapper\targs=%s\tpath=%s\treal=%s\n' \
+            printf '%s\ttmux-wrapper\tsurface=%s\targs=%s\tpath=%s\treal=%s\n' \
                 "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                "$surface" \
                 "$*" \
                 "$PATH" \
                 "$real" >> "$SHELLRAISER_WRAPPER_DEBUG_LOG"
         fi
 
+        if [ -n "$surface" ]; then
+            export SHELLRAISER_SURFACE_ID="$surface"
+        fi
+
         exec "$real" "$@"
         """#
             .replacingOccurrences(of: "__REAL_TMUX_SHIM__", with: realShimPath)
+            .replacingOccurrences(of: "__BAKED_SURFACE_ID__", with: bakedSurfaceID ?? "")
     }
 
     /// zsh shim that sources the user's original `.zshenv` and reapplies Shellraiser runtime vars.

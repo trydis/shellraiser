@@ -284,7 +284,10 @@ public struct ShellraiserAppleScriptClient: ShellraiserControlling {
 
     /// Returns one surface snapshot when the target still exists.
     public func surface(withID id: String) throws -> ShellraiserSurfaceSnapshot? {
-        try listSurfaces(workspaceID: nil).first(where: { $0.id == id })
+        let normalizedID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try listSurfaces(workspaceID: nil).first {
+            $0.id.caseInsensitiveCompare(normalizedID) == .orderedSame
+        }
     }
 
     /// Closes one existing surface.
