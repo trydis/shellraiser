@@ -37,6 +37,87 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(try store.load().sessionsByName["coord"]?.panes.map(\.paneId), ["%1"])
     }
 
+    /// Verifies `tmux new-session -P -F` prints the requested tmux format for Claude probes.
+    func testTmuxNewSessionSupportsPrintFormatFlags() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: [
+            "-L", "claude-swarm-1",
+            "new-session",
+            "-d",
+            "-s", "claude-swarm",
+            "-n", "swarm-view",
+            "-P",
+            "-F", "#{pane_id}"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "%1\n")
+        XCTAssertEqual(try store.load().socketState(named: "claude-swarm-1").sessionsByName.keys.sorted(), ["claude-swarm"])
+        XCTAssertEqual(try store.load().socketState(named: "claude-swarm-1").sessionsByName["claude-swarm"]?.panes.first?.windowName, "swarm-view")
+        XCTAssertTrue(controller.sentTextEvents.isEmpty)
+        XCTAssertTrue(controller.sentKeyEvents.isEmpty)
+    }
+
+    /// Verifies `tmux -V` succeeds for Claude's compatibility probe.
+    func testTmuxVersionFlagReturnsTmuxLikeVersionString() {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["-V"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "tmux 3.4\n")
+    }
+
+    /// Verifies `tmux -L <socket> ...` keeps state isolated per socket namespace.
+    func testTmuxSocketNamespacesAreTrackedIndependently() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let createResult = cli.run(arguments: ["-L", "claude-swarm-1", "new-session", "-d", "-s", "coord"])
+        let foundInSocket = cli.run(arguments: ["-L", "claude-swarm-1", "has-session", "-t", "coord"])
+        let missingInDefault = cli.run(arguments: ["has-session", "-t", "coord"])
+
+        XCTAssertEqual(createResult.exitCode, 0)
+        XCTAssertEqual(foundInSocket.exitCode, 0)
+        XCTAssertEqual(missingInDefault.exitCode, 1)
+        XCTAssertEqual(try store.load().socketState(named: "claude-swarm-1").sessionsByName.keys.sorted(), ["coord"])
+    }
+
+    /// Verifies legacy flat shim state decodes into the default socket namespace.
+    func testTmuxShimStateDecodesLegacyFlatSchema() throws {
+        let legacyJSON = """
+        {
+          "nextPaneOrdinal" : 4,
+          "sessionsByName" : {
+            "coord" : {
+              "focusedPaneId" : "%2",
+              "name" : "coord",
+              "panes" : [
+                {
+                  "paneId" : "%2",
+                  "surfaceId" : "surface-1"
+                }
+              ],
+              "workspaceId" : "workspace-1"
+            }
+          },
+          "version" : 1
+        }
+        """
+
+        let state = try JSONDecoder().decode(TmuxShimState.self, from: Data(legacyJSON.utf8))
+
+        XCTAssertEqual(state.socketState(named: TmuxShimState.defaultSocketName).nextPaneOrdinal, 4)
+        XCTAssertEqual(state.socketState(named: TmuxShimState.defaultSocketName).sessionsByName.keys.sorted(), ["coord"])
+        XCTAssertEqual(state.sessionsByName["coord"]?.focusedPaneId, "%2")
+    }
+
     /// Verifies `tmux split-window` uses the focused pane when the target names a session.
     func testTmuxSplitWindowCreatesSiblingPane() throws {
         let controller = MockShellraiserController()
@@ -109,8 +190,8 @@ final class ShellraiserShimCLITests: XCTestCase {
                         name: "coord",
                         workspaceId: "workspace-1",
                         panes: [
-                            TmuxShimPane(paneId: "%1", surfaceId: "surface-1"),
-                            TmuxShimPane(paneId: "%2", surfaceId: "surface-2")
+                            TmuxShimPane(paneId: "%1", surfaceId: "surface-1", windowName: "main"),
+                            TmuxShimPane(paneId: "%2", surfaceId: "surface-2", windowName: "tools")
                         ],
                         focusedPaneId: "%2"
                     )
@@ -126,6 +207,108 @@ final class ShellraiserShimCLITests: XCTestCase {
             result.standardOutput,
             "%1 /tmp/project 0\n%2 /tmp/project/tools 1\n"
         )
+    }
+
+    /// Verifies `tmux list-windows` renders unique window names for one session.
+    func testTmuxListWindowsRendersWindowNames() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [
+                            TmuxShimPane(paneId: "%1", surfaceId: "surface-1", windowName: "swarm-view"),
+                            TmuxShimPane(paneId: "%2", surfaceId: "surface-2", windowName: "worker-1"),
+                            TmuxShimPane(paneId: "%3", surfaceId: "surface-3", windowName: "worker-1")
+                        ],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["list-windows", "-t", "claude-swarm", "-F", "#{window_name}"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "swarm-view\nworker-1\n")
+    }
+
+    /// Verifies `tmux new-window` creates a new pane with the requested window name.
+    func testTmuxNewWindowCreatesPaneForRequestedWindow() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                nextPaneOrdinal: 2,
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1", windowName: "main")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: [
+            "new-window",
+            "-t", "claude-swarm",
+            "-n", "swarm-view",
+            "-P",
+            "-F", "#{pane_id}"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "%2\n")
+        XCTAssertEqual(controller.splitEvents.count, 1)
+        XCTAssertEqual(try store.load().sessionsByName["claude-swarm"]?.panes.last?.windowName, "swarm-view")
+    }
+
+    /// Verifies session:window targets resolve to the pane inside that named window.
+    func testTmuxListPanesResolvesSessionWindowTargets() throws {
+        let controller = MockShellraiserController(
+            surfaces: [
+                ShellraiserSurfaceSnapshot(
+                    id: "surface-1",
+                    title: "coord",
+                    workingDirectory: "/tmp/project",
+                    workspaceId: "workspace-1",
+                    workspaceName: "claude-swarm"
+                ),
+                ShellraiserSurfaceSnapshot(
+                    id: "surface-2",
+                    title: "swarm-view",
+                    workingDirectory: "/tmp/project/swarm",
+                    workspaceId: "workspace-1",
+                    workspaceName: "claude-swarm"
+                )
+            ]
+        )
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [
+                            TmuxShimPane(paneId: "%1", surfaceId: "surface-1", windowName: "main"),
+                            TmuxShimPane(paneId: "%2", surfaceId: "surface-2", windowName: "swarm-view")
+                        ],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["list-panes", "-t", "claude-swarm:swarm-view", "-F", "#{pane_id}"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "%2\n")
     }
 
     /// Verifies `tmux has-session` returns status one for stale sessions after cleanup.
@@ -148,6 +331,34 @@ final class ShellraiserShimCLITests: XCTestCase {
         let result = cli.run(arguments: ["has-session", "-t", "coord"])
 
         XCTAssertEqual(result.exitCode, 1)
+    }
+
+    /// Verifies `tmux a` focuses the active pane in the socket-scoped session.
+    func testTmuxAttachAliasFocusesActivePane() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                socketsByName: [
+                    "claude-swarm-1": TmuxShimSocketState(
+                        nextPaneOrdinal: 2,
+                        sessionsByName: [
+                            "claude": TmuxShimSession(
+                                name: "claude",
+                                workspaceId: "workspace-1",
+                                panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                                focusedPaneId: "%1"
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["-L", "claude-swarm-1", "a"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.focusedSurfaceIDs, ["surface-1"])
     }
 
     /// Verifies the AppleScript client emits a quoted application literal in `tell application`.

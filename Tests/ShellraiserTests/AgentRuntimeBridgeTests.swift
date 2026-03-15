@@ -26,6 +26,14 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let wrapperContents = try String(contentsOf: wrapperURL, encoding: .utf8)
 
+        XCTAssertTrue(wrapperContents.contains("\"teammateMode\": \"tmux\""))
+        XCTAssertTrue(wrapperContents.contains("teammate_mode_args=\"--teammate-mode tmux\""))
+        XCTAssertTrue(wrapperContents.contains("claude-wrapper"))
+        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
+        XCTAssertTrue(wrapperContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
+        XCTAssertTrue(wrapperContents.contains("--debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\""))
+        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" --teammate-mode tmux --debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\" \"$@\""))
+        XCTAssertTrue(wrapperContents.contains("\"$real\" --settings \"$settings_file\" --debug-file \"$SHELLRAISER_CLAUDE_DEBUG_LOG\" \"$@\""))
         XCTAssertTrue(wrapperContents.contains("\"SessionStart\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"startup\""))
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"resume\""))
@@ -137,8 +145,71 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let claudeWrapperContents = try String(contentsOf: claudeWrapperURL, encoding: .utf8)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrapperURL.path))
         XCTAssertTrue(wrapperContents.contains(shimURL.path))
+        XCTAssertTrue(wrapperContents.contains("tmux-wrapper"))
         XCTAssertTrue(wrapperContents.contains("SHELLRAISER_REAL_TMUX_SHIM"))
         XCTAssertTrue(claudeWrapperContents.contains("SHELLRAISER_TEAM_BIN"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: bridge.binDirectory.appendingPathComponent("tmux").path))
+    }
+
+    /// Verifies the terminal environment exposes the tmux shim only inside Shellraiser-managed terminals.
+    func testEnvironmentPrependsTeamBinWhenTmuxShimIsAvailable() throws {
+        let shimURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShellraiserTests-tmux-env-\(UUID().uuidString)")
+        FileManager.default.createFile(atPath: shimURL.path, contents: Data("#!/bin/sh\nexit 0\n".utf8))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shimURL.path)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: shimURL)
+        }
+
+        let bridge = AgentRuntimeBridge(
+            rootURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("ShellraiserTests-env-\(UUID().uuidString)", isDirectory: true),
+            tmuxShimExecutableURLOverride: shimURL,
+            allowsTmuxShimDiscovery: false
+        )
+        let environment = bridge.environment(
+            for: UUID(),
+            shellPath: "/bin/zsh",
+            baseEnvironment: ["PATH": "/usr/bin:/bin"]
+        )
+
+        XCTAssertEqual(environment["SHELLRAISER_TEAM_BIN"], bridge.teamBinDirectory.path)
+        XCTAssertEqual(environment["SHELLRAISER_WRAPPER_DEBUG_LOG"], bridge.debugLogURL.path)
+        XCTAssertEqual(
+            environment["SHELLRAISER_CLAUDE_DEBUG_LOG"],
+            bridge.runtimeDirectory.appendingPathComponent("claude-debug-\(environment["SHELLRAISER_SURFACE_ID"]!).log").path
+        )
+        XCTAssertEqual(
+            environment["PATH"],
+            "\(bridge.binDirectory.path):\(bridge.teamBinDirectory.path):/usr/bin:/bin"
+        )
+    }
+
+    /// Verifies zsh bootstrap files preserve the tmux shim path and exported team-bin metadata.
+    func testPrepareRuntimeSupportWritesZshShimsWithTeamBinPathPreserved() throws {
+        let shimURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShellraiserTests-tmux-zsh-\(UUID().uuidString)")
+        FileManager.default.createFile(atPath: shimURL.path, contents: Data("#!/bin/sh\nexit 0\n".utf8))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shimURL.path)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: shimURL)
+        }
+
+        let bridge = AgentRuntimeBridge(
+            rootURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("ShellraiserTests-zsh-\(UUID().uuidString)", isDirectory: true),
+            tmuxShimExecutableURLOverride: shimURL,
+            allowsTmuxShimDiscovery: false
+        )
+        let zshRcURL = bridge.zshShimDirectory.appendingPathComponent(".zshrc")
+
+        bridge.prepareRuntimeSupport()
+
+        let zshRcContents = try String(contentsOf: zshRcURL, encoding: .utf8)
+        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:"))
+        XCTAssertTrue(zshRcContents.contains("export SHELLRAISER_EVENT_LOG"))
+        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_WRAPPER_DEBUG_LOG"))
+        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_CLAUDE_DEBUG_LOG"))
+        XCTAssertTrue(zshRcContents.contains("SHELLRAISER_TEAM_BIN"))
     }
 }

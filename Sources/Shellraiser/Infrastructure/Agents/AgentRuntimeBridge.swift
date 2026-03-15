@@ -10,6 +10,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     let teamBinDirectory: URL
     let zshShimDirectory: URL
     let eventLogURL: URL
+    let debugLogURL: URL
 
     private let fileManager: FileManager
     private let tmuxShimExecutableURLOverride: URL?
@@ -39,6 +40,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         self.teamBinDirectory = rootURL.appendingPathComponent("team-bin", isDirectory: true)
         self.zshShimDirectory = rootURL.appendingPathComponent("zsh", isDirectory: true)
         self.eventLogURL = rootURL.appendingPathComponent("agent-completions.log")
+        self.debugLogURL = rootURL.appendingPathComponent("agent-runtime-debug.log")
         self.tmuxShimExecutableURLOverride = tmuxShimExecutableURLOverride
         self.allowsTmuxShimDiscovery = allowsTmuxShimDiscovery
         prepareRuntimeSupport()
@@ -53,6 +55,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
             if !fileManager.fileExists(atPath: eventLogURL.path) {
                 fileManager.createFile(atPath: eventLogURL.path, contents: Data())
+            }
+            if !fileManager.fileExists(atPath: debugLogURL.path) {
+                fileManager.createFile(atPath: debugLogURL.path, contents: Data())
             }
 
             try writeExecutable(
@@ -108,12 +113,18 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         var environment = baseEnvironment
         let inheritedPath = environment["PATH"] ?? ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let wrapperPath = [binDirectory.path, inheritedPath]
+        let tmuxWrapperURL = teamBinDirectory.appendingPathComponent("tmux")
+        let pathPrefixes = fileManager.isExecutableFile(atPath: tmuxWrapperURL.path)
+            ? [binDirectory.path, teamBinDirectory.path]
+            : [binDirectory.path]
+        let wrapperPath = (pathPrefixes + [inheritedPath])
             .filter { !$0.isEmpty }
             .joined(separator: ":")
 
         environment["PATH"] = wrapperPath
         environment["SHELLRAISER_EVENT_LOG"] = eventLogURL.path
+        environment["SHELLRAISER_WRAPPER_DEBUG_LOG"] = debugLogURL.path
+        environment["SHELLRAISER_CLAUDE_DEBUG_LOG"] = claudeDebugLogURL(for: surfaceId).path
         environment["SHELLRAISER_SURFACE_ID"] = surfaceId.uuidString
         environment["SHELLRAISER_HELPER_PATH"] = binDirectory.appendingPathComponent("shellraiser-agent-complete").path
 
@@ -131,12 +142,16 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             environment["SHELLRAISER_REAL_CODEX"] = codexPath
         }
 
-        let tmuxWrapperURL = teamBinDirectory.appendingPathComponent("tmux")
         if fileManager.isExecutableFile(atPath: tmuxWrapperURL.path) {
             environment["SHELLRAISER_TEAM_BIN"] = teamBinDirectory.path
         }
 
         return environment
+    }
+
+    /// Returns the per-surface Claude debug log path used for wrapper instrumentation.
+    private func claudeDebugLogURL(for surfaceId: UUID) -> URL {
+        runtimeDirectory.appendingPathComponent("claude-debug-\(surfaceId.uuidString).log")
     }
 
     /// Resolves the current machine path for an executable before wrapper PATH injection takes effect.
@@ -354,9 +369,27 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
+        teammate_mode_args=""
+        claude_debug_args=""
         if [ -n "${SHELLRAISER_TEAM_BIN:-}" ]; then
             export PATH="${SHELLRAISER_TEAM_BIN}:${PATH}"
+            teammate_mode_args="--teammate-mode tmux"
         fi
+        if [ -n "${SHELLRAISER_CLAUDE_DEBUG_LOG:-}" ]; then
+            claude_debug_args="--debug-file $SHELLRAISER_CLAUDE_DEBUG_LOG"
+        fi
+
+        debug_log() {
+            if [ -n "${SHELLRAISER_WRAPPER_DEBUG_LOG:-}" ]; then
+                printf '%s\tclaude-wrapper\tsurface=%s\targs=%s\tteammate_mode=%s\tclaude_debug=%s\tpath=%s\n' \
+                    "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                    "$surface" \
+                    "$*" \
+                    "${teammate_mode_args:-}" \
+                    "${SHELLRAISER_CLAUDE_DEBUG_LOG:-}" \
+                    "$PATH" >> "$SHELLRAISER_WRAPPER_DEBUG_LOG"
+            fi
+        }
 
         settings_file="${TMPDIR:-/tmp}/schmux-claude-${surface}-$$.json"
         cleanup() {
@@ -366,6 +399,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         cat > "$settings_file" <<EOF
         {
+          "teammateMode": "tmux",
           "hooks": {
             "SessionStart": [
               {
@@ -454,7 +488,21 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         EOF
 
         set +e
-        "$real" --settings "$settings_file" "$@"
+        # Force split-pane teams through the tmux shim when Shellraiser has exposed it.
+        debug_log "$@"
+        if [ -n "$teammate_mode_args" ]; then
+            if [ -n "$claude_debug_args" ]; then
+                "$real" --settings "$settings_file" --teammate-mode tmux --debug-file "$SHELLRAISER_CLAUDE_DEBUG_LOG" "$@"
+            else
+                "$real" --settings "$settings_file" --teammate-mode tmux "$@"
+            fi
+        else
+            if [ -n "$claude_debug_args" ]; then
+                "$real" --settings "$settings_file" --debug-file "$SHELLRAISER_CLAUDE_DEBUG_LOG" "$@"
+            else
+                "$real" --settings "$settings_file" "$@"
+            fi
+        fi
         status=$?
         set -e
         "$helper" claudeCode "$surface" exited || true
@@ -660,6 +708,14 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             exit 127
         fi
 
+        if [ -n "${SHELLRAISER_WRAPPER_DEBUG_LOG:-}" ]; then
+            printf '%s\ttmux-wrapper\targs=%s\tpath=%s\treal=%s\n' \
+                "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                "$*" \
+                "$PATH" \
+                "$real" >> "$SHELLRAISER_WRAPPER_DEBUG_LOG"
+        fi
+
         exec "$real" "$@"
         """#
             .replacingOccurrences(of: "__REAL_TMUX_SHIM__", with: realShimPath)
@@ -672,8 +728,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zshenv"
         fi
 
-        export PATH="${SHELLRAISER_WRAPPER_BIN}:${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
-        export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
+        export PATH="${SHELLRAISER_WRAPPER_BIN}:${SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:}${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
+        export SHELLRAISER_EVENT_LOG SHELLRAISER_WRAPPER_DEBUG_LOG SHELLRAISER_CLAUDE_DEBUG_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH SHELLRAISER_TEAM_BIN
         """#
     }
 
@@ -684,8 +740,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zprofile"
         fi
 
-        export PATH="${SHELLRAISER_WRAPPER_BIN}:${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
-        export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
+        export PATH="${SHELLRAISER_WRAPPER_BIN}:${SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:}${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
+        export SHELLRAISER_EVENT_LOG SHELLRAISER_WRAPPER_DEBUG_LOG SHELLRAISER_CLAUDE_DEBUG_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH SHELLRAISER_TEAM_BIN
         """#
     }
 
@@ -696,8 +752,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zshrc"
         fi
 
-        export PATH="${SHELLRAISER_WRAPPER_BIN}:${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
-        export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
+        export PATH="${SHELLRAISER_WRAPPER_BIN}:${SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:}${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
+        export SHELLRAISER_EVENT_LOG SHELLRAISER_WRAPPER_DEBUG_LOG SHELLRAISER_CLAUDE_DEBUG_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH SHELLRAISER_TEAM_BIN
         """#
     }
 
@@ -708,8 +764,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zlogin"
         fi
 
-        export PATH="${SHELLRAISER_WRAPPER_BIN}:${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
-        export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
+        export PATH="${SHELLRAISER_WRAPPER_BIN}:${SHELLRAISER_TEAM_BIN:+${SHELLRAISER_TEAM_BIN}:}${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
+        export SHELLRAISER_EVENT_LOG SHELLRAISER_WRAPPER_DEBUG_LOG SHELLRAISER_CLAUDE_DEBUG_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH SHELLRAISER_TEAM_BIN
         """#
     }
 }
