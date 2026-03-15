@@ -29,7 +29,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertEqual(host.updatedSurfaceIds, [surface.id])
@@ -65,7 +66,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.syncContainerView(
             secondContainer,
@@ -80,7 +82,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertTrue(host.superview === secondContainer)
@@ -118,7 +121,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.syncContainerView(
             container,
@@ -133,7 +137,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertTrue(firstHost.superview == nil)
@@ -169,7 +174,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.dismantleContainerView(container, runtime: runtime)
 
@@ -203,7 +209,8 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         _ = terminalConfig
         _ = onActivate
@@ -213,6 +220,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         workingDirectoryChangeHandler = onWorkingDirectoryChange
         _ = onChildExited
         _ = onPaneNavigationRequest
+        _ = onProgressReport
         updatedSurfaceIds.append(surfaceModel.id)
     }
 }

@@ -24,6 +24,8 @@ final class GhosttyRuntime {
         case title(String)
         case workingDirectory(String)
         case childExited
+        /// OSC 9;4 progress report; nil means the remove state.
+        case progressReport(SurfaceProgressReport?)
     }
 
     struct SurfaceCallbacks {
@@ -31,6 +33,7 @@ final class GhosttyRuntime {
         let onTitleChange: (String) -> Void
         let onWorkingDirectoryChange: (String) -> Void
         let onChildExited: () -> Void
+        let onProgressReport: (SurfaceProgressReport?) -> Void
     }
 
     /// Pasteboard targets supported by the embedded host.
@@ -97,13 +100,15 @@ final class GhosttyRuntime {
         onIdleNotification: @escaping () -> Void,
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
-        onChildExited: @escaping () -> Void
+        onChildExited: @escaping () -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         callbacksBySurfaceId[surfaceId] = SurfaceCallbacks(
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onProgressReport: onProgressReport
         )
     }
 
@@ -117,14 +122,16 @@ final class GhosttyRuntime {
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) -> LibghosttySurfaceView {
         registerSurfaceCallbacks(
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onProgressReport: onProgressReport
         )
         releasedSurfaceIds.remove(surfaceModel.id)
 
@@ -138,7 +145,8 @@ final class GhosttyRuntime {
                 onTitleChange: onTitleChange,
                 onWorkingDirectoryChange: onWorkingDirectoryChange,
                 onChildExited: onChildExited,
-                onPaneNavigationRequest: onPaneNavigationRequest
+                onPaneNavigationRequest: onPaneNavigationRequest,
+                onProgressReport: onProgressReport
             )
             return existing
         }
@@ -152,7 +160,8 @@ final class GhosttyRuntime {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         hostViewsBySurfaceId[surfaceModel.id] = created
         mountedHostCountsBySurfaceId[surfaceModel.id] = 0
@@ -803,6 +812,32 @@ final class GhosttyRuntime {
                 runtime.notifyAppearanceDidChange()
             }
             return true
+        case GHOSTTY_ACTION_PROGRESS_REPORT:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let raw = action.action.progress_report
+            let report: SurfaceProgressReport? = {
+                switch raw.state {
+                case GHOSTTY_PROGRESS_STATE_REMOVE:
+                    return nil
+                case GHOSTTY_PROGRESS_STATE_SET:
+                    return SurfaceProgressReport(state: .set, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
+                case GHOSTTY_PROGRESS_STATE_ERROR:
+                    return SurfaceProgressReport(state: .error, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
+                case GHOSTTY_PROGRESS_STATE_INDETERMINATE:
+                    return SurfaceProgressReport(state: .indeterminate, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
+                case GHOSTTY_PROGRESS_STATE_PAUSE:
+                    return SurfaceProgressReport(state: .pause, progress: raw.progress >= 0 ? UInt8(raw.progress) : nil)
+                default:
+                    return nil
+                }
+            }()
+            let capturedEvent: SurfaceActionEvent = .progressReport(report)
+            DispatchQueue.main.async {
+                runtime.handleAction(surfaceKey: surfaceKey, event: capturedEvent)
+            }
+            return true
         default:
             return true
         }
@@ -983,6 +1018,8 @@ final class GhosttyRuntime {
             callbacks.onWorkingDirectoryChange(workingDirectory)
         case .childExited:
             callbacks.onChildExited()
+        case .progressReport(let report):
+            callbacks.onProgressReport(report)
         }
     }
 

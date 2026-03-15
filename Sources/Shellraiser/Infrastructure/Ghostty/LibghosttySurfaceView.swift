@@ -16,6 +16,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     private var onWorkingDirectoryChange: (String) -> Void
     private var onChildExited: () -> Void
     private var onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
+    private var onProgressReport: (SurfaceProgressReport?) -> Void
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
     private var didInterpretCommand = false
@@ -36,7 +37,8 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         self.surfaceModel = surfaceModel
         self.terminalConfig = terminalConfig
@@ -47,6 +49,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
         self.onPaneNavigationRequest = onPaneNavigationRequest
+        self.onProgressReport = onProgressReport
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         wantsLayer = true
@@ -61,7 +64,8 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onProgressReport: onProgressReport
         )
         surfaceHandle = GhosttyRuntime.shared.createSurface(
             for: self,
@@ -430,7 +434,8 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         self.surfaceModel = surfaceModel
         self.terminalConfig = terminalConfig
@@ -441,13 +446,15 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.onWorkingDirectoryChange = onWorkingDirectoryChange
         self.onChildExited = onChildExited
         self.onPaneNavigationRequest = onPaneNavigationRequest
+        self.onProgressReport = onProgressReport
 
         GhosttyRuntime.shared.registerSurfaceCallbacks(
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onProgressReport: onProgressReport
         )
         applyGhosttyBackgroundStyle()
         updateScaleAndSize()

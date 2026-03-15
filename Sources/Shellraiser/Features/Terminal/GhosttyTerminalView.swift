@@ -17,7 +17,8 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     )
 }
 
@@ -79,6 +80,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
     let onWorkingDirectoryChange: (String) -> Void
     let onChildExited: () -> Void
     let onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
+    let onProgressReport: (SurfaceProgressReport?) -> Void
 
     /// Builds the AppKit surface host.
     func makeNSView(context: Context) -> NSView {
@@ -93,7 +95,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         Self.syncContainerView(
             containerView,
@@ -108,7 +111,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         return containerView
         #else
@@ -131,7 +135,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         Self.syncContainerView(
             container,
@@ -146,7 +151,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         #endif
     }
@@ -173,7 +179,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         if container.mountedSurfaceId != surface.id {
             if let mountedSurfaceId = container.mountedSurfaceId {
@@ -195,7 +202,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
     }
 
@@ -222,7 +230,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         host.update(
             surfaceModel: surface,
@@ -233,7 +242,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
-            onPaneNavigationRequest: onPaneNavigationRequest
+            onPaneNavigationRequest: onPaneNavigationRequest,
+            onProgressReport: onProgressReport
         )
         runtime.setSurfaceFocus(surfaceId: surface.id, focused: isFocused)
         runtime.restorePendingFocusIfNeeded(surfaceId: surface.id, hostView: host)

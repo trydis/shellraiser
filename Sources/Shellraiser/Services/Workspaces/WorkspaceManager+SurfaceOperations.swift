@@ -42,6 +42,7 @@ extension WorkspaceManager {
         clearBusySurface(surfaceId)
         clearLiveCodexSessionSurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
+        clearProgressReport(surfaceId: surfaceId)
 
         if let workspace = workspace(id: workspaceId),
            let focusedSurfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId(),
@@ -142,6 +143,38 @@ extension WorkspaceManager {
         guard liveCodexSessionSurfaceIds.contains(surfaceId) else { return }
 
         markSurfaceBusy(surfaceId)
+    }
+
+    /// Stores or removes an OSC 9;4 progress report for a surface, resetting the 15-second auto-clear timer.
+    func setProgressReport(workspaceId: UUID, surfaceId: UUID, report: SurfaceProgressReport?) {
+        if let report {
+            progressBySurfaceId[surfaceId] = report
+            progressClearTimers[surfaceId]?.invalidate()
+            progressClearTimers[surfaceId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.progressBySurfaceId.removeValue(forKey: surfaceId)
+                    self?.progressClearTimers.removeValue(forKey: surfaceId)
+                }
+            }
+        } else {
+            clearProgressReport(surfaceId: surfaceId)
+        }
+    }
+
+    /// Returns the progress report for the focused surface of a workspace, if any.
+    func focusedSurfaceProgress(workspaceId: UUID) -> SurfaceProgressReport? {
+        guard let workspace = workspace(id: workspaceId),
+              let focusedSurfaceId = workspace.focusedSurfaceId else {
+            return nil
+        }
+        return progressBySurfaceId[focusedSurfaceId]
+    }
+
+    /// Removes any stored progress state and cancels the auto-clear timer for a surface.
+    func clearProgressReport(surfaceId: UUID) {
+        progressBySurfaceId.removeValue(forKey: surfaceId)
+        progressClearTimers[surfaceId]?.invalidate()
+        progressClearTimers.removeValue(forKey: surfaceId)
     }
 
     /// Updates tab title using the current terminal title.
