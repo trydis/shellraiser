@@ -114,6 +114,24 @@ slugify_workspace_name() {
 
     if [[ -z "$slug" ]]; then
         fail_with_message "Workspace name must contain letters or numbers after sanitization."
+        return 1
+    fi
+
+    if ! git check-ref-format --branch "$slug" >/dev/null 2>&1; then
+        slug="$(
+            printf '%s' "$slug" \
+                | sed -E 's/\.\.+/./g; s/(\.lock)+$//; s/^[.-]+//; s/[.-]+$//'
+        )"
+    fi
+
+    if [[ -z "$slug" ]]; then
+        fail_with_message "Workspace name '$workspace_name' cannot be converted to a Git-safe slug."
+        return 1
+    fi
+
+    if ! git check-ref-format --branch "$slug" >/dev/null 2>&1; then
+        fail_with_message "Workspace name '$workspace_name' cannot be converted to a Git-safe slug."
+        return 1
     fi
 
     printf '%s\n' "$slug"
