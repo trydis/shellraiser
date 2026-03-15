@@ -216,26 +216,35 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         var seenPaths = Set<String>()
         var roots: [URL] = []
 
-        func appendAncestors(of url: URL?) {
-            guard var currentURL = url?.standardizedFileURL else { return }
+        func appendIfNew(_ url: URL?) {
+            guard let standardizedURL = url?.standardizedFileURL else { return }
+            let path = standardizedURL.path
+            guard seenPaths.insert(path).inserted else { return }
+            roots.append(standardizedURL)
+        }
 
-            while true {
-                let path = currentURL.path
-                if seenPaths.insert(path).inserted {
-                    roots.append(currentURL)
+        func appendBoundedAncestors(of url: URL?, limit: Int) {
+            guard limit > 0 else { return }
+
+            var currentURL = url?.standardizedFileURL
+            for _ in 0..<limit {
+                guard let unwrappedURL = currentURL else { break }
+                appendIfNew(unwrappedURL)
+
+                let parentURL = unwrappedURL.deletingLastPathComponent().standardizedFileURL
+                if parentURL.path == unwrappedURL.path {
+                    break
                 }
-
-                let parentURL = currentURL.deletingLastPathComponent()
-                guard parentURL.path != currentURL.path else { break }
                 currentURL = parentURL
             }
         }
 
-        appendAncestors(of: Bundle.main.bundleURL)
-        appendAncestors(of: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        appendBoundedAncestors(of: Bundle.main.bundleURL, limit: 8)
+        appendBoundedAncestors(of: URL(fileURLWithPath: FileManager.default.currentDirectoryPath), limit: 8)
 
-        if let executablePath = ProcessInfo.processInfo.arguments.first {
-            appendAncestors(of: URL(fileURLWithPath: executablePath))
+        if let executablePath = ProcessInfo.processInfo.arguments.first,
+           executablePath.hasPrefix("/") {
+            appendBoundedAncestors(of: URL(fileURLWithPath: executablePath), limit: 8)
         }
 
         return roots
