@@ -413,6 +413,7 @@ remove_workspace_worktree() {
 
     if [[ "$worktree_path" == "$main_repo_root" ]]; then
         fail_with_message "Refusing to remove the primary repository worktree '$worktree_path'."
+        return 1
     fi
 
     if ! registered_worktree_exists "$repo_root" "$worktree_path"; then
@@ -420,8 +421,10 @@ remove_workspace_worktree() {
     fi
 
     if worktree_is_clean "$worktree_path"; then
-        git -C "$repo_root" worktree remove "$worktree_path" \
-            || fail_with_message "Failed to remove clean worktree '$worktree_path'."
+        if ! git -C "$repo_root" worktree remove "$worktree_path"; then
+            fail_with_message "Failed to remove clean worktree '$worktree_path'."
+            return 1
+        fi
         return 0
     fi
 
