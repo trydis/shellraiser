@@ -438,6 +438,29 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(result.standardOutput, "%2\n")
     }
 
+    /// Verifies `tmux send-keys` recognizes `ctrl+x` and `ctrl-x` forms in addition to `C-x`.
+    func testTmuxSendKeysRecognizesAllControlKeyPrefixForms() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["send-keys", "-t", "coord", "ctrl-c", "ctrl+d", "C-z"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.sentKeyEvents.map(\.1), ["ctrl-c", "ctrl-d", "ctrl-z"])
+    }
+
     /// Verifies `tmux has-session` returns status one for stale sessions after cleanup.
     func testTmuxHasSessionDropsStaleWorkspaceMappings() {
         let controller = MockShellraiserController(workspaces: [])

@@ -811,14 +811,25 @@ public struct TmuxShimCLI {
         case "bspace", "backspace", "delete":
             return "backspace"
         default:
-            let normalized = token.lowercased().replacingOccurrences(of: "-", with: "")
-            guard normalized.hasPrefix("c"), normalized.count >= 2,
-                  let letter = normalized.dropFirst().first, letter.isLetter,
-                  normalized.dropFirst() == String(letter) else {
-                return nil
-            }
-            return "ctrl-\(letter)"
+            return controlLetterKey(from: token)
         }
+    }
+
+    /// Parses `C-x`, `ctrl-x`, and `ctrl+x` forms into a `ctrl-x` key name.
+    private func controlLetterKey(from token: String) -> String? {
+        let lower = token.lowercased()
+        let rest: Substring
+        if lower.hasPrefix("ctrl-") || lower.hasPrefix("ctrl+") {
+            rest = lower.dropFirst(5)
+        } else if lower.hasPrefix("c-") {
+            rest = lower.dropFirst(2)
+        } else {
+            return nil
+        }
+        guard rest.count == 1, let letter = rest.first, letter.isLetter else {
+            return nil
+        }
+        return "ctrl-\(letter)"
     }
 
     /// Renders one pane list for `list-panes`, batching surface lookups into a single controller call.
