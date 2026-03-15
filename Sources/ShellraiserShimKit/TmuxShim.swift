@@ -235,6 +235,11 @@ public protocol TmuxShimStateStoring {
 
     /// Persists the supplied shim state atomically.
     func save(_ state: TmuxShimState) throws
+
+    /// Loads state, passes it to body for in-place modification, then saves — all under an
+    /// exclusive advisory lock so concurrent shim invocations cannot interleave their
+    /// load–modify–save cycles.
+    func transact(_ body: (inout TmuxShimState) throws -> Void) throws
 }
 
 /// File-backed state store for the tmux-compatible shim.
@@ -276,17 +281,40 @@ public struct FileTmuxShimStateStore: TmuxShimStateStoring {
         let data = try encoder.encode(state)
         try data.write(to: stateURL, options: .atomic)
     }
+
+    /// Executes body under an exclusive `flock` advisory lock so concurrent shim processes
+    /// cannot interleave their load–modify–save cycles. The lock file is a sibling of the
+    /// state file. If the lock file cannot be opened, the body is executed without a lock.
+    public func transact(_ body: (inout TmuxShimState) throws -> Void) throws {
+        let directoryURL = stateURL.deletingLastPathComponent()
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let lockPath = directoryURL.appendingPathComponent(".tmux-shim.lock").path
+        let fd = open(lockPath, O_CREAT | O_RDWR, 0o644)
+        defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
+        if fd >= 0 { flock(fd, LOCK_EX) }
+        var state = try load()
+        try body(&state)
+        try save(state)
+    }
 }
 
 /// tmux-compatible command runner backed by native Shellraiser automation primitives.
 public struct TmuxShimCLI {
     private let controller: ShellraiserControlling
     private let stateStore: TmuxShimStateStoring
+    private let environment: [String: String]
 
     /// Creates a tmux-compatible CLI wrapper around one control transport and one state store.
-    public init(controller: ShellraiserControlling, stateStore: TmuxShimStateStoring) {
+    /// - Parameter environment: Process environment used for surface-binding lookups;
+    ///   defaults to `ProcessInfo.processInfo.environment`.
+    public init(
+        controller: ShellraiserControlling,
+        stateStore: TmuxShimStateStoring,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
         self.controller = controller
         self.stateStore = stateStore
+        self.environment = environment
     }
 
     /// Parses and executes one tmux-compatible invocation.
@@ -369,9 +397,10 @@ public struct TmuxShimCLI {
         let sessionName = try parser.requiredValue(for: "-t")
         try parser.ensureFullyParsed()
 
-        var state = try stateStore.load()
-        let exists = try cleanupStaleEntries(in: &state, socketName: socketName).sessionsByName[sessionName] != nil
-        try stateStore.save(state)
+        var exists = false
+        try stateStore.transact { state in
+            exists = try cleanupStaleEntries(in: &state, socketName: socketName).sessionsByName[sessionName] != nil
+        }
         return ShellraiserCommandResult(exitCode: exists ? 0 : 1)
     }
 
@@ -386,40 +415,41 @@ public struct TmuxShimCLI {
         let remainingArguments = parser.drainRemaining()
         let commandText = remainingArguments.isEmpty ? nil : remainingArguments.joined(separator: " ")
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        guard socketState.sessionsByName[sessionName] == nil else {
-            throw ShellraiserControlError("Session already exists: \(sessionName)")
+        var outputLine = ""
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            guard socketState.sessionsByName[sessionName] == nil else {
+                throw ShellraiserControlError("Session already exists: \(sessionName)")
+            }
+
+            let created = try createSessionSurface(for: sessionName)
+            let pane = TmuxShimPane(
+                paneId: allocatePaneID(in: &socketState),
+                surfaceId: created.surface.id,
+                windowName: windowName
+            )
+            let session = TmuxShimSession(
+                name: sessionName,
+                workspaceId: created.workspace.id,
+                panes: [pane],
+                focusedPaneId: pane.paneId,
+                ownsWorkspace: created.ownsWorkspace
+            )
+            socketState.sessionsByName[sessionName] = session
+            state.setSocketState(socketState, named: socketName)
+
+            if let commandText, !commandText.isEmpty {
+                try controller.sendText(commandText, toSurfaceWithID: created.surface.id)
+                try controller.sendKey(named: "enter", toSurfaceWithID: created.surface.id)
+            }
+
+            outputLine = try renderFormat(
+                outputFormat,
+                session: session,
+                pane: pane,
+                surface: created.surface
+            )
         }
-
-        let created = try createSessionSurface(for: sessionName)
-        let pane = TmuxShimPane(
-            paneId: allocatePaneID(in: &socketState),
-            surfaceId: created.surface.id,
-            windowName: windowName
-        )
-        let session = TmuxShimSession(
-            name: sessionName,
-            workspaceId: created.workspace.id,
-            panes: [pane],
-            focusedPaneId: pane.paneId,
-            ownsWorkspace: created.ownsWorkspace
-        )
-        socketState.sessionsByName[sessionName] = session
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
-
-        if let commandText, !commandText.isEmpty {
-            try controller.sendText(commandText, toSurfaceWithID: created.surface.id)
-            try controller.sendKey(named: "enter", toSurfaceWithID: created.surface.id)
-        }
-
-        let outputLine = try renderFormat(
-            outputFormat,
-            session: session,
-            pane: pane,
-            surface: created.surface
-        )
         return ShellraiserCommandResult(standardOutput: outputLine + "\n")
     }
 
@@ -443,7 +473,7 @@ public struct TmuxShimCLI {
         surface: ShellraiserSurfaceSnapshot,
         ownsWorkspace: Bool
     )? {
-        guard let rawSurfaceID = ProcessInfo.processInfo.environment["SHELLRAISER_SURFACE_ID"]?
+        guard let rawSurfaceID = environment["SHELLRAISER_SURFACE_ID"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !rawSurfaceID.isEmpty,
               let originSurface = try controller.surface(withID: rawSurfaceID),
@@ -480,46 +510,48 @@ public struct TmuxShimCLI {
         let isVertical = parser.flag("-v")
         _ = parser.flag("-P")
         let outputFormat = parser.value(for: "-F") ?? "#{pane_id}"
+        let workingDirectory = parser.value(for: "-c")
         let remainingArguments = parser.drainRemaining()
         let commandText = remainingArguments.isEmpty ? nil : remainingArguments.joined(separator: " ")
 
         let direction: ShellraiserSplitDirection = isHorizontal ? .right : (isVertical ? .down : .down)
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        let createdSurface = try controller.splitSurface(
-            id: resolved.pane.surfaceId,
-            direction: direction,
-            workingDirectory: nil
-        )
+        var outputLine = ""
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolved = try resolveTarget(targetName, in: socketState)
+            let createdSurface = try controller.splitSurface(
+                id: resolved.pane.surfaceId,
+                direction: direction,
+                workingDirectory: workingDirectory
+            )
 
-        guard var session = socketState.sessionsByName[resolved.session.name] else {
-            throw ShellraiserControlError("Session disappeared during split.")
+            guard var session = socketState.sessionsByName[resolved.session.name] else {
+                throw ShellraiserControlError("Session disappeared during split.")
+            }
+
+            let pane = TmuxShimPane(
+                paneId: allocatePaneID(in: &socketState),
+                surfaceId: createdSurface.id,
+                windowName: resolved.pane.windowName
+            )
+            session.panes.append(pane)
+            session.focusedPaneId = pane.paneId
+            socketState.sessionsByName[session.name] = session
+            state.setSocketState(socketState, named: socketName)
+
+            if let commandText, !commandText.isEmpty {
+                try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
+                try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
+            }
+
+            outputLine = try renderFormat(
+                outputFormat,
+                session: session,
+                pane: pane,
+                surface: createdSurface
+            )
         }
-
-        let pane = TmuxShimPane(
-            paneId: allocatePaneID(in: &socketState),
-            surfaceId: createdSurface.id,
-            windowName: resolved.pane.windowName
-        )
-        session.panes.append(pane)
-        session.focusedPaneId = pane.paneId
-        socketState.sessionsByName[session.name] = session
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
-
-        if let commandText, !commandText.isEmpty {
-            try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
-            try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
-        }
-
-        let outputLine = try renderFormat(
-            outputFormat,
-            session: session,
-            pane: pane,
-            surface: createdSurface
-        )
         return ShellraiserCommandResult(standardOutput: outputLine + "\n")
     }
 
@@ -534,18 +566,17 @@ public struct TmuxShimCLI {
             throw ShellraiserControlError("send-keys requires at least one key or text token")
         }
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolved = try resolveTarget(targetName, in: socketState)
+            state.setSocketState(socketState, named: socketName)
 
-        if literalMode {
-            try controller.sendText(tokens.joined(separator: " "), toSurfaceWithID: resolved.pane.surfaceId)
-            return ShellraiserCommandResult()
+            if literalMode {
+                try controller.sendText(tokens.joined(separator: " "), toSurfaceWithID: resolved.pane.surfaceId)
+            } else {
+                try sendTokens(tokens, toSurfaceID: resolved.pane.surfaceId)
+            }
         }
-
-        try sendTokens(tokens, toSurfaceID: resolved.pane.surfaceId)
         return ShellraiserCommandResult()
     }
 
@@ -557,18 +588,18 @@ public struct TmuxShimCLI {
         _ = parser.value(for: "-T")
         _ = parser.drainRemaining()
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        try controller.focusSurface(id: resolved.pane.surfaceId)
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolved = try resolveTarget(targetName, in: socketState)
+            try controller.focusSurface(id: resolved.pane.surfaceId)
 
-        guard var session = socketState.sessionsByName[resolved.session.name] else {
-            throw ShellraiserControlError("Session disappeared during focus.")
+            guard var session = socketState.sessionsByName[resolved.session.name] else {
+                throw ShellraiserControlError("Session disappeared during focus.")
+            }
+            session.focusedPaneId = resolved.pane.paneId
+            socketState.sessionsByName[session.name] = session
+            state.setSocketState(socketState, named: socketName)
         }
-        session.focusedPaneId = resolved.pane.paneId
-        socketState.sessionsByName[session.name] = session
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
         return ShellraiserCommandResult()
     }
 
@@ -579,11 +610,11 @@ public struct TmuxShimCLI {
         _ = try parser.requiredPositional("layout")
         try parser.ensureFullyParsed()
 
-        var state = try loadState()
-        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        _ = try resolveTarget(targetName, in: socketState)
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
+        try stateStore.transact { state in
+            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            _ = try resolveTarget(targetName, in: socketState)
+            state.setSocketState(socketState, named: socketName)
+        }
         return ShellraiserCommandResult()
     }
 
@@ -594,16 +625,17 @@ public struct TmuxShimCLI {
         let format = parser.value(for: "-F") ?? "#{pane_id}"
         try parser.ensureFullyParsed()
 
-        var state = try loadState()
-        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolvedSession = try resolveSession(targetName, in: socketState)
-        let lines = try renderPaneLines(
-            for: resolvedSession,
-            format: format,
-            windowName: sessionWindowName(from: targetName)
-        )
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
+        var lines: [String] = []
+        try stateStore.transact { state in
+            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolvedSession = try resolveSession(targetName, in: socketState)
+            lines = try renderPaneLines(
+                for: resolvedSession,
+                format: format,
+                windowName: sessionWindowName(from: targetName)
+            )
+            state.setSocketState(socketState, named: socketName)
+        }
         return ShellraiserCommandResult(standardOutput: lines.joined(separator: "\n") + (lines.isEmpty ? "" : "\n"))
     }
 
@@ -614,12 +646,13 @@ public struct TmuxShimCLI {
         let format = parser.value(for: "-F") ?? "#{window_name}"
         try parser.ensureFullyParsed()
 
-        var state = try loadState()
-        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolvedSession = try resolveSession(targetName, in: socketState)
-        let lines = renderWindowLines(for: resolvedSession, format: format)
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
+        var lines: [String] = []
+        try stateStore.transact { state in
+            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolvedSession = try resolveSession(targetName, in: socketState)
+            lines = renderWindowLines(for: resolvedSession, format: format)
+            state.setSocketState(socketState, named: socketName)
+        }
         return ShellraiserCommandResult(standardOutput: lines.joined(separator: "\n") + (lines.isEmpty ? "" : "\n"))
     }
 
@@ -630,44 +663,46 @@ public struct TmuxShimCLI {
         let windowName = parser.value(for: "-n") ?? "main"
         _ = parser.flag("-P")
         let outputFormat = parser.value(for: "-F") ?? "#{pane_id}"
+        let workingDirectory = parser.value(for: "-c")
         let remainingArguments = parser.drainRemaining()
         let commandText = remainingArguments.isEmpty ? nil : remainingArguments.joined(separator: " ")
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        let createdSurface = try controller.splitSurface(
-            id: resolved.pane.surfaceId,
-            direction: .right,
-            workingDirectory: nil
-        )
+        var outputLine = ""
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolved = try resolveTarget(targetName, in: socketState)
+            let createdSurface = try controller.splitSurface(
+                id: resolved.pane.surfaceId,
+                direction: .right,
+                workingDirectory: workingDirectory
+            )
 
-        guard var session = socketState.sessionsByName[resolved.session.name] else {
-            throw ShellraiserControlError("Session disappeared during window creation.")
+            guard var session = socketState.sessionsByName[resolved.session.name] else {
+                throw ShellraiserControlError("Session disappeared during window creation.")
+            }
+
+            let pane = TmuxShimPane(
+                paneId: allocatePaneID(in: &socketState),
+                surfaceId: createdSurface.id,
+                windowName: windowName
+            )
+            session.panes.append(pane)
+            session.focusedPaneId = pane.paneId
+            socketState.sessionsByName[session.name] = session
+            state.setSocketState(socketState, named: socketName)
+
+            if let commandText, !commandText.isEmpty {
+                try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
+                try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
+            }
+
+            outputLine = try renderFormat(
+                outputFormat,
+                session: session,
+                pane: pane,
+                surface: createdSurface
+            )
         }
-
-        let pane = TmuxShimPane(
-            paneId: allocatePaneID(in: &socketState),
-            surfaceId: createdSurface.id,
-            windowName: windowName
-        )
-        session.panes.append(pane)
-        session.focusedPaneId = pane.paneId
-        socketState.sessionsByName[session.name] = session
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
-
-        if let commandText, !commandText.isEmpty {
-            try controller.sendText(commandText, toSurfaceWithID: createdSurface.id)
-            try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
-        }
-
-        let outputLine = try renderFormat(
-            outputFormat,
-            session: session,
-            pane: pane,
-            surface: createdSurface
-        )
         return ShellraiserCommandResult(standardOutput: outputLine + "\n")
     }
 
@@ -678,17 +713,17 @@ public struct TmuxShimCLI {
         let targetName = parser.value(for: "-t")
         _ = parser.drainRemaining()
 
-        var state = try loadState()
-        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        if let targetName {
-            if targetName.hasPrefix("%") || targetName.contains(":") {
-                _ = try resolveTarget(targetName, in: socketState)
-            } else {
-                _ = try resolveSession(targetName, in: socketState)
+        try stateStore.transact { state in
+            let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            if let targetName {
+                if targetName.hasPrefix("%") || targetName.contains(":") {
+                    _ = try resolveTarget(targetName, in: socketState)
+                } else {
+                    _ = try resolveSession(targetName, in: socketState)
+                }
             }
+            state.setSocketState(socketState, named: socketName)
         }
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
         return ShellraiserCommandResult()
     }
 
@@ -698,25 +733,25 @@ public struct TmuxShimCLI {
         let targetName = try parser.requiredValue(for: "-t")
         try parser.ensureFullyParsed()
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        let resolved = try resolveTarget(targetName, in: socketState)
-        try controller.closeSurface(id: resolved.pane.surfaceId)
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            let resolved = try resolveTarget(targetName, in: socketState)
+            try controller.closeSurface(id: resolved.pane.surfaceId)
 
-        guard var session = socketState.sessionsByName[resolved.session.name] else {
-            throw ShellraiserControlError("Session disappeared during pane close.")
+            guard var session = socketState.sessionsByName[resolved.session.name] else {
+                throw ShellraiserControlError("Session disappeared during pane close.")
+            }
+            session.panes.removeAll { $0.paneId == resolved.pane.paneId }
+            session.focusedPaneId = session.panes.first?.paneId
+
+            if session.panes.isEmpty {
+                socketState.sessionsByName.removeValue(forKey: session.name)
+            } else {
+                socketState.sessionsByName[session.name] = session
+            }
+
+            state.setSocketState(socketState, named: socketName)
         }
-        session.panes.removeAll { $0.paneId == resolved.pane.paneId }
-        session.focusedPaneId = session.panes.first?.paneId
-
-        if session.panes.isEmpty {
-            socketState.sessionsByName.removeValue(forKey: session.name)
-        } else {
-            socketState.sessionsByName[session.name] = session
-        }
-
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
         return ShellraiserCommandResult()
     }
 
@@ -726,22 +761,22 @@ public struct TmuxShimCLI {
         let sessionName = try parser.requiredValue(for: "-t")
         try parser.ensureFullyParsed()
 
-        var state = try loadState()
-        var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
-        guard let session = socketState.sessionsByName.removeValue(forKey: sessionName) else {
-            throw ShellraiserControlError("Unknown session: \(sessionName)")
-        }
-
-        if session.ownsWorkspace {
-            try controller.closeWorkspace(id: session.workspaceId)
-        } else {
-            for pane in session.panes {
-                try controller.closeSurface(id: pane.surfaceId)
+        try stateStore.transact { state in
+            var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+            guard let session = socketState.sessionsByName.removeValue(forKey: sessionName) else {
+                throw ShellraiserControlError("Unknown session: \(sessionName)")
             }
-        }
 
-        state.setSocketState(socketState, named: socketName)
-        try stateStore.save(state)
+            if session.ownsWorkspace {
+                try controller.closeWorkspace(id: session.workspaceId)
+            } else {
+                for pane in session.panes {
+                    try controller.closeSurface(id: pane.surfaceId)
+                }
+            }
+
+            state.setSocketState(socketState, named: socketName)
+        }
         return ShellraiserCommandResult()
     }
 
@@ -779,22 +814,26 @@ public struct TmuxShimCLI {
         case "bspace", "backspace", "delete":
             return "backspace"
         default:
-            guard token.count == 3 || token.count == 4 else { return nil }
             let normalized = token.lowercased().replacingOccurrences(of: "-", with: "")
-            guard normalized.hasPrefix("c"), let letter = normalized.last, letter.isLetter else {
+            guard normalized.hasPrefix("c"), normalized.count >= 2,
+                  let letter = normalized.dropFirst().first, letter.isLetter,
+                  normalized.dropFirst() == String(letter) else {
                 return nil
             }
             return "ctrl-\(letter)"
         }
     }
 
-    /// Renders one pane list for `list-panes`.
+    /// Renders one pane list for `list-panes`, batching surface lookups into a single controller call.
     private func renderPaneLines(for session: TmuxShimSession, format: String, windowName: String? = nil) throws -> [String] {
-        try session.panes
-            .filter { windowName == nil || $0.windowName == windowName }
-            .map { pane in
-            let surface = try controller.surface(withID: pane.surfaceId)
-            return try renderFormat(format, session: session, pane: pane, surface: surface)
+        let panes = session.panes.filter { windowName == nil || $0.windowName == windowName }
+        guard !panes.isEmpty else { return [] }
+
+        let allSurfaces = try controller.listSurfaces(workspaceID: nil)
+        let surfaceByID = Dictionary(uniqueKeysWithValues: allSurfaces.map { ($0.id, $0) })
+
+        return try panes.map { pane in
+            try renderFormat(format, session: session, pane: pane, surface: surfaceByID[pane.surfaceId])
         }
     }
 
@@ -822,11 +861,6 @@ public struct TmuxShimCLI {
             .replacingOccurrences(of: "#{pane_current_path}", with: surface?.workingDirectory ?? "")
             .replacingOccurrences(of: "#{pane_title}", with: surface?.title ?? "")
             .replacingOccurrences(of: "#{window_active}", with: activeValue)
-    }
-
-    /// Loads the current shim state from storage.
-    private func loadState() throws -> TmuxShimState {
-        try stateStore.load()
     }
 
     /// Allocates the next tmux-visible pane identifier.

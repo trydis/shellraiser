@@ -64,12 +64,13 @@ final class ShellraiserShimCLITests: XCTestCase {
 
     /// Verifies `tmux new-session` attaches to the originating workspace when launched from a managed surface.
     func testTmuxNewSessionAttachesToOriginWorkspaceWhenSurfaceContextExists() throws {
-        setenv("SHELLRAISER_SURFACE_ID", "surface-1", 1)
-        defer { unsetenv("SHELLRAISER_SURFACE_ID") }
-
         let controller = MockShellraiserController()
         let store = InMemoryTmuxShimStateStore()
-        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+        let cli = TmuxShimCLI(
+            controller: controller,
+            stateStore: store,
+            environment: ["SHELLRAISER_SURFACE_ID": "surface-1"]
+        )
 
         let result = cli.run(arguments: ["new-session", "-d", "-s", "claude-swarm", "-n", "swarm-view"])
 
@@ -609,6 +610,11 @@ private final class InMemoryTmuxShimStateStore: TmuxShimStateStoring {
     /// Persists the supplied state snapshot.
     func save(_ state: TmuxShimState) throws {
         self.state = state
+    }
+
+    /// Executes body against the in-memory state without a lock (single-threaded tests).
+    func transact(_ body: (inout TmuxShimState) throws -> Void) throws {
+        try body(&state)
     }
 }
 
