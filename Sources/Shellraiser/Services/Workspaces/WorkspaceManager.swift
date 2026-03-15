@@ -74,7 +74,11 @@ final class WorkspaceManager: ObservableObject {
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
     @Published var busySurfaceIds: Set<UUID> = []
+    @Published var progressBySurfaceId: [UUID: SurfaceProgressReport] = [:]
     var liveCodexSessionSurfaceIds: Set<UUID> = []
+    var progressClearTimers: [UUID: Timer] = [:]
+    /// Monotonically-increasing generation counter per surface; used to detect stale timer callbacks.
+    var progressTimerGeneration: [UUID: Int] = [:]
 
     let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager

@@ -29,7 +29,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertEqual(host.updatedSurfaceIds, [surface.id])
@@ -37,6 +38,39 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertEqual(runtime.setSurfaceFocusCalls.map(\.focused), [true])
         XCTAssertEqual(runtime.restorePendingFocusSurfaceIds, [surface.id])
         XCTAssertTrue(runtime.restoredHosts.first === host)
+    }
+
+    /// Verifies syncHostView forwards the onProgressReport closure to the host view.
+    func testSyncHostViewForwardsProgressReportClosure() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+        var receivedReport: SurfaceProgressReport??
+        let expectedReport = SurfaceProgressReport(state: .set, progress: 42)
+
+        GhosttyTerminalView.syncHostView(
+            host,
+            runtime: runtime,
+            surface: surface,
+            config: config,
+            isFocused: false,
+            onActivate: {},
+            onIdleNotification: {},
+            onInput: { _ in },
+            onTitleChange: { _ in },
+            onWorkingDirectoryChange: { _ in },
+            onChildExited: {},
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { receivedReport = $0 }
+        )
+
+        host.progressReportHandler?(expectedReport)
+        XCTAssertEqual(receivedReport, .some(expectedReport))
     }
 
     /// Verifies reparenting a shared host into a new wrapper keeps the host off the mount root.
@@ -65,7 +99,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.syncContainerView(
             secondContainer,
@@ -80,7 +115,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertTrue(host.superview === secondContainer)
@@ -118,7 +154,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.syncContainerView(
             container,
@@ -133,7 +170,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
 
         XCTAssertTrue(firstHost.superview == nil)
@@ -169,7 +207,8 @@ final class GhosttyTerminalViewTests: XCTestCase {
             onTitleChange: { _ in },
             onWorkingDirectoryChange: { _ in },
             onChildExited: {},
-            onPaneNavigationRequest: { _ in }
+            onPaneNavigationRequest: { _ in },
+            onProgressReport: { _ in }
         )
         GhosttyTerminalView.dismantleContainerView(container, runtime: runtime)
 
@@ -193,6 +232,8 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
     /// Supplies the responder target to make first responder.
     var firstResponderTarget: NSResponder { self }
 
+    private(set) var progressReportHandler: ((SurfaceProgressReport?) -> Void)?
+
     /// Records host updates dispatched through the terminal view helper.
     func update(
         surfaceModel: SurfaceModel,
@@ -203,7 +244,8 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         _ = terminalConfig
         _ = onActivate
@@ -213,6 +255,7 @@ private final class MockGhosttyTerminalHostView: NSView, GhosttyTerminalHostView
         workingDirectoryChangeHandler = onWorkingDirectoryChange
         _ = onChildExited
         _ = onPaneNavigationRequest
+        progressReportHandler = onProgressReport
         updatedSurfaceIds.append(surfaceModel.id)
     }
 }

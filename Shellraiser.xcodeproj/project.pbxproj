@@ -57,8 +57,10 @@
 		A1000050 /* GitBranchResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050; };
 		A1000051 /* WorkspaceManager+GitBranches.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000051; };
 		A1000052 /* SurfaceInputEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000052; };
-		A1000053 /* SurfaceSearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000053; };
-		A1000054 /* TerminalSearchOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000054; };
+		A1000053 /* SurfaceProgressReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000053; };
+		A1000054 /* SurfaceProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000054; };
+		A1000055 /* SurfaceSearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000055; };
+		A1000056 /* TerminalSearchOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000056; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -112,8 +114,10 @@
 		A2000050 /* GitBranchResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/Git/GitBranchResolver.swift; sourceTree = "<group>"; };
 		A2000051 /* WorkspaceManager+GitBranches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/Workspaces/WorkspaceManager+GitBranches.swift"; sourceTree = "<group>"; };
 		A2000052 /* SurfaceInputEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceInputEvent.swift; sourceTree = "<group>"; };
-		A2000053 /* SurfaceSearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceSearchState.swift; sourceTree = "<group>"; };
-		A2000054 /* TerminalSearchOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkspaceDetail/TerminalSearchOverlay.swift; sourceTree = "<group>"; };
+		A2000053 /* SurfaceProgressReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceProgressReport.swift; sourceTree = "<group>"; };
+		A2000054 /* SurfaceProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkspaceDetail/SurfaceProgressBar.swift; sourceTree = "<group>"; };
+		A2000055 /* SurfaceSearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceSearchState.swift; sourceTree = "<group>"; };
+		A2000056 /* TerminalSearchOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkspaceDetail/TerminalSearchOverlay.swift; sourceTree = "<group>"; };
 		A3000001 /* Shellraiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shellraiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -151,7 +155,8 @@
 				A2000018 /* TerminalPanelConfig.swift */,
 				A2000019 /* SurfaceModel.swift */,
 				A2000052 /* SurfaceInputEvent.swift */,
-				A2000053 /* SurfaceSearchState.swift */,
+				A2000053 /* SurfaceProgressReport.swift */,
+				A2000055 /* SurfaceSearchState.swift */,
 				A2000020 /* PaneNodeModel.swift */,
 				A2000041 /* PaneNodeModel+Operations.swift */,
 				A2000021 /* WorkspaceModel.swift */,
@@ -175,8 +180,9 @@
 				A2000037 /* PaneNodeView.swift */,
 				A2000038 /* PaneSplitView.swift */,
 				A2000039 /* PaneLeafView.swift */,
-				A2000054 /* TerminalSearchOverlay.swift */,
+				A2000056 /* TerminalSearchOverlay.swift */,
 				A2000040 /* SurfaceTabButton.swift */,
+				A2000054 /* SurfaceProgressBar.swift */,
 				A2000008 /* GhosttyTerminalView.swift */,
 				A2000012 /* LibghosttySurfaceView.swift */,
 				A2000013 /* GhosttyRuntime.swift */,
@@ -291,7 +297,9 @@
 				A1000018 /* TerminalPanelConfig.swift in Sources */,
 				A1000019 /* SurfaceModel.swift in Sources */,
 				A1000052 /* SurfaceInputEvent.swift in Sources */,
-				A1000053 /* SurfaceSearchState.swift in Sources */,
+				A1000053 /* SurfaceProgressReport.swift in Sources */,
+				A1000054 /* SurfaceProgressBar.swift in Sources */,
+				A1000055 /* SurfaceSearchState.swift in Sources */,
 				A1000020 /* PaneNodeModel.swift in Sources */,
 				A1000041 /* PaneNodeModel+Operations.swift in Sources */,
 				A1000021 /* WorkspaceModel.swift in Sources */,
@@ -311,7 +319,7 @@
 				A1000037 /* PaneNodeView.swift in Sources */,
 				A1000038 /* PaneSplitView.swift in Sources */,
 				A1000039 /* PaneLeafView.swift in Sources */,
-				A1000054 /* TerminalSearchOverlay.swift in Sources */,
+				A1000056 /* TerminalSearchOverlay.swift in Sources */,
 				A1000040 /* SurfaceTabButton.swift in Sources */,
 				A1000008 /* GhosttyTerminalView.swift in Sources */,
 				A1000009 /* WorkspaceCatalogManager.swift in Sources */,

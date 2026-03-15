@@ -232,6 +232,13 @@ struct PaneLeafView: View {
                         onPaneNavigationRequest: { direction in
                             manager.focusAdjacentPane(from: activeSurface.id, direction: direction)
                         },
+                        onProgressReport: { report in
+                            manager.setProgressReport(
+                                workspaceId: workspaceId,
+                                surfaceId: activeSurface.id,
+                                report: report
+                            )
+                        },
                         onSearchStateChange: { state in
                             searchState = state
                         }
@@ -253,6 +260,17 @@ struct PaneLeafView: View {
                     .opacity(unfocusedSplitStyle.overlayOpacity)
                     .padding(8)
                     .allowsHitTesting(false)
+            }
+
+            if let activeSurface,
+               let report = manager.progressBySurfaceId[activeSurface.id] {
+                VStack {
+                    SurfaceProgressBar(report: report)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 6)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
             }
 
             if let searchState {

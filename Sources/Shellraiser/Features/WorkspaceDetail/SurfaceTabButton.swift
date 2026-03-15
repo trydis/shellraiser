@@ -26,12 +26,21 @@ struct SurfaceTabButton: View {
         Color(nsColor: chromeStyle.foregroundColor).opacity(isSelected ? 0.76 : 0.55)
     }
 
+    /// Color for the tab status dot derived from progress state, completion, or default.
+    private var dotFill: AnyShapeStyle {
+        if let report = manager.progressBySurfaceId[surface.id] {
+            return AnyShapeStyle(report.state.tintColor)
+        }
+        if surface.hasPendingCompletion { return AnyShapeStyle(AppTheme.accentGradient) }
+        return AnyShapeStyle(Color.white.opacity(0.2))
+    }
+
     var body: some View {
         HStack(spacing: 6) {
             Button(action: onSelect) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(surface.hasPendingCompletion ? AnyShapeStyle(AppTheme.accentGradient) : AnyShapeStyle(Color.white.opacity(0.2)))
+                        .fill(dotFill)
                         .frame(width: 6, height: 6)
 
                     Text(surface.title)
