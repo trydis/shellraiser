@@ -65,7 +65,8 @@ resolve_workspace_name() {
     if (($# > 0)); then
         workspace_name="$*"
     else
-        if ! read -r -p "Workspace name: " workspace_name; then
+        printf '%s' "Workspace name: "
+        if ! read -r workspace_name; then
             fail_workspace_name_required
         fi
     fi
@@ -84,7 +85,8 @@ resolve_worktree_name() {
     if (($# > 0)); then
         worktree_name="$*"
     else
-        if ! read -r -p "Worktree name: " worktree_name; then
+        printf '%s' "Worktree name: "
+        if ! read -r worktree_name; then
             fail_worktree_name_required
         fi
     fi
@@ -318,7 +320,8 @@ confirm_with_user() {
     local prompt_message="$1"
     local response=""
 
-    if ! read -r -p "$prompt_message [y/N] " response; then
+    printf '%s' "$prompt_message [y/N] "
+    if ! read -r response; then
         return 1
     fi
 
