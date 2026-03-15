@@ -14,7 +14,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             try? FileManager.default.removeItem(at: directory)
         }
 
-        return AgentRuntimeBridge(rootURL: directory)
+        return AgentRuntimeBridge(rootURL: directory, allowsTmuxShimDiscovery: false)
     }
 
     /// Verifies the Claude wrapper emits start, stop, permission-request, and selected notification hooks.
@@ -125,7 +125,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let bridge = AgentRuntimeBridge(
             rootURL: directory,
-            tmuxShimExecutableURLOverride: shimURL
+            tmuxShimExecutableURLOverride: shimURL,
+            allowsTmuxShimDiscovery: false
         )
         let wrapperURL = bridge.teamBinDirectory.appendingPathComponent("tmux")
         let claudeWrapperURL = bridge.binDirectory.appendingPathComponent("claude")

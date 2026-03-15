@@ -13,6 +13,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
     private let fileManager: FileManager
     private let tmuxShimExecutableURLOverride: URL?
+    private let allowsTmuxShimDiscovery: Bool
     private var cachedExecutablePaths: [String: String?] = [:]
 
     /// Creates the bridge rooted in the process temp directory to avoid path escaping issues.
@@ -29,7 +30,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     init(
         rootURL: URL,
         fileManager: FileManager = .default,
-        tmuxShimExecutableURLOverride: URL? = nil
+        tmuxShimExecutableURLOverride: URL? = nil,
+        allowsTmuxShimDiscovery: Bool = true
     ) {
         self.fileManager = fileManager
         self.runtimeDirectory = rootURL
@@ -38,6 +40,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         self.zshShimDirectory = rootURL.appendingPathComponent("zsh", isDirectory: true)
         self.eventLogURL = rootURL.appendingPathComponent("agent-completions.log")
         self.tmuxShimExecutableURLOverride = tmuxShimExecutableURLOverride
+        self.allowsTmuxShimDiscovery = allowsTmuxShimDiscovery
         prepareRuntimeSupport()
     }
 
@@ -178,6 +181,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
            fileManager.isExecutableFile(atPath: override.path) {
             return override
         }
+
+        guard allowsTmuxShimDiscovery else { return nil }
 
         if let environmentOverride = ProcessInfo.processInfo.environment["SHELLRAISER_TMUX_SHIM"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
