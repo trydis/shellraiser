@@ -114,6 +114,7 @@ extension WorkspaceManager {
     /// Builds command palette items for terminal-local Ghostty actions.
     private func terminalCommandPaletteItems() -> [CommandPaletteItem] {
         let commands: [(id: String, title: String, image: String, shortcut: String?, keywords: [String], action: String)] = [
+            ("terminal.find", "Find in Terminal", "magnifyingglass", "cmd-f", ["find", "search", "text", "grep"], "start_search"),
             ("terminal.reset", "Reset Terminal", "arrow.clockwise", nil, ["terminal", "surface", "reset"], "reset"),
             ("terminal.font-increase", "Increase Font Size", "plus.magnifyingglass", "cmd-=", ["font", "text", "zoom", "increase"], "increase_font_size:1"),
             ("terminal.font-decrease", "Decrease Font Size", "minus.magnifyingglass", "cmd--", ["font", "text", "zoom", "decrease"], "decrease_font_size:1"),

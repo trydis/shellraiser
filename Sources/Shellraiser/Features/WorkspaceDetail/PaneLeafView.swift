@@ -6,6 +6,9 @@ struct PaneLeafView: View {
     let leaf: PaneLeafModel
     @ObservedObject var manager: WorkspaceManager
 
+    /// Active in-terminal search state, set by the runtime when a search starts or ends.
+    @State private var searchState: SurfaceSearchState?
+
     /// Active surface for the pane.
     private var activeSurface: SurfaceModel? {
         if let activeId = leaf.activeSurfaceId {
@@ -235,6 +238,9 @@ struct PaneLeafView: View {
                                 surfaceId: activeSurface.id,
                                 report: report
                             )
+                        },
+                        onSearchStateChange: { state in
+                            searchState = state
                         }
                     )
                     .id(activeSurface.id)
@@ -265,6 +271,34 @@ struct PaneLeafView: View {
                     Spacer()
                 }
                 .allowsHitTesting(false)
+            }
+
+            if let searchState {
+                TerminalSearchOverlay(
+                    searchState: searchState,
+                    onNavigateNext: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.performBindingAction(
+                            surfaceId: surfaceId,
+                            action: "navigate_search:next"
+                        )
+                    },
+                    onNavigatePrevious: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.performBindingAction(
+                            surfaceId: surfaceId,
+                            action: "navigate_search:previous"
+                        )
+                    },
+                    onClose: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
+                    }
+                )
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 20)
+                .padding(.top, 14)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
