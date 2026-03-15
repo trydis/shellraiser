@@ -148,6 +148,32 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(try store.load().sessionsByName["coord"]?.focusedPaneId, "%2")
     }
 
+    /// Verifies `tmux split-window -P -F` returns formatted pane output without sending stray shell text.
+    func testTmuxSplitWindowSupportsPrintFormatFlags() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                nextPaneOrdinal: 2,
+                sessionsByName: [
+                    "coord": TmuxShimSession(
+                        name: "coord",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%1", surfaceId: "surface-1", windowName: "main")],
+                        focusedPaneId: "%1"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["split-window", "-t", "%1", "-h", "-P", "-F", "#{pane_id}"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "%2\n")
+        XCTAssertTrue(controller.sentTextEvents.isEmpty)
+        XCTAssertTrue(controller.sentKeyEvents.isEmpty)
+    }
+
     /// Verifies `tmux send-keys` mixes literal text and special keys in order.
     func testTmuxSendKeysFlushesTextBeforeSpecialKeys() throws {
         let controller = MockShellraiserController()
@@ -236,6 +262,34 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(result.standardOutput, "swarm-view\nworker-1\n")
     }
 
+    /// Verifies `tmux select-pane` tolerates styling flags used by Claude without failing.
+    func testTmuxSelectPaneAcceptsStylingFlags() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%3", surfaceId: "surface-1", windowName: "swarm-view")],
+                        focusedPaneId: "%3"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: [
+            "select-pane",
+            "-t", "%3",
+            "-P", "bg=default,fg=yellow",
+            "-T", "devils-advocate"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.focusedSurfaceIDs, ["surface-1"])
+    }
+
     /// Verifies `tmux new-window` creates a new pane with the requested window name.
     func testTmuxNewWindowCreatesPaneForRequestedWindow() throws {
         let controller = MockShellraiserController()
@@ -266,6 +320,56 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(result.standardOutput, "%2\n")
         XCTAssertEqual(controller.splitEvents.count, 1)
         XCTAssertEqual(try store.load().sessionsByName["claude-swarm"]?.panes.last?.windowName, "swarm-view")
+    }
+
+    /// Verifies `tmux select-layout` acts as a successful no-op for layout requests.
+    func testTmuxSelectLayoutActsAsNoOp() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%2", surfaceId: "surface-1", windowName: "swarm-view")],
+                        focusedPaneId: "%2"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["select-layout", "-t", "claude-swarm:swarm-view", "tiled"])
+
+        XCTAssertEqual(result.exitCode, 0)
+    }
+
+    /// Verifies `tmux set-option` acts as a successful no-op for pane styling.
+    func testTmuxSetOptionActsAsNoOp() throws {
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [TmuxShimPane(paneId: "%3", surfaceId: "surface-1", windowName: "swarm-view")],
+                        focusedPaneId: "%3"
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: [
+            "set-option",
+            "-p",
+            "-t", "%3",
+            "pane-border-style",
+            "fg=yellow"
+        ])
+
+        XCTAssertEqual(result.exitCode, 0)
     }
 
     /// Verifies session:window targets resolve to the pane inside that named window.

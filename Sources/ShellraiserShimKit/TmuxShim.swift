@@ -274,6 +274,8 @@ public struct TmuxShimCLI {
                 return try runSendKeys(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "select-pane":
                 return try runSelectPane(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
+            case "select-layout":
+                return try runSelectLayout(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "list-panes":
                 return try runListPanes(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "list-windows":
@@ -282,6 +284,8 @@ public struct TmuxShimCLI {
                 return try runDisplayMessage(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "new-window":
                 return try runNewWindow(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
+            case "set-option":
+                return try runSetOption(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "kill-pane":
                 return try runKillPane(arguments: parsedInvocation.arguments, socketName: parsedInvocation.socketName)
             case "kill-session":
@@ -390,6 +394,8 @@ public struct TmuxShimCLI {
         let targetName = parser.value(for: "-t")
         let isHorizontal = parser.flag("-h")
         let isVertical = parser.flag("-v")
+        _ = parser.flag("-P")
+        let outputFormat = parser.value(for: "-F") ?? "#{pane_id}"
         let remainingArguments = parser.drainRemaining()
         let commandText = remainingArguments.isEmpty ? nil : remainingArguments.joined(separator: " ")
 
@@ -424,7 +430,13 @@ public struct TmuxShimCLI {
             try controller.sendKey(named: "enter", toSurfaceWithID: createdSurface.id)
         }
 
-        return ShellraiserCommandResult(standardOutput: "\(pane.paneId)\n")
+        let outputLine = try renderFormat(
+            outputFormat,
+            session: session,
+            pane: pane,
+            surface: createdSurface
+        )
+        return ShellraiserCommandResult(standardOutput: outputLine + "\n")
     }
 
     /// Executes `tmux send-keys`.
@@ -457,7 +469,9 @@ public struct TmuxShimCLI {
     private func runSelectPane(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
         var parser = CommandArgumentParser(arguments: arguments)
         let targetName = try parser.requiredValue(for: "-t")
-        try parser.ensureFullyParsed()
+        _ = parser.flag("-P")
+        _ = parser.value(for: "-T")
+        _ = parser.drainRemaining()
 
         var state = try loadState()
         var socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
@@ -469,6 +483,21 @@ public struct TmuxShimCLI {
         }
         session.focusedPaneId = resolved.pane.paneId
         socketState.sessionsByName[session.name] = session
+        state.setSocketState(socketState, named: socketName)
+        try stateStore.save(state)
+        return ShellraiserCommandResult()
+    }
+
+    /// Executes `tmux select-layout`.
+    private func runSelectLayout(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
+        var parser = CommandArgumentParser(arguments: arguments)
+        let targetName = parser.value(for: "-t")
+        _ = try parser.requiredPositional("layout")
+        try parser.ensureFullyParsed()
+
+        var state = try loadState()
+        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+        _ = try resolveTarget(targetName, in: socketState)
         state.setSocketState(socketState, named: socketName)
         try stateStore.save(state)
         return ShellraiserCommandResult()
@@ -578,6 +607,27 @@ public struct TmuxShimCLI {
             surface: createdSurface
         )
         return ShellraiserCommandResult(standardOutput: outputLine + "\n")
+    }
+
+    /// Executes `tmux set-option` as a no-op compatibility command for styling/layout tweaks.
+    private func runSetOption(arguments: [String], socketName: String) throws -> ShellraiserCommandResult {
+        var parser = CommandArgumentParser(arguments: arguments)
+        _ = parser.flag("-p")
+        let targetName = parser.value(for: "-t")
+        _ = parser.drainRemaining()
+
+        var state = try loadState()
+        let socketState = try cleanupStaleEntries(in: &state, socketName: socketName)
+        if let targetName {
+            if targetName.hasPrefix("%") || targetName.contains(":") {
+                _ = try resolveTarget(targetName, in: socketState)
+            } else {
+                _ = try resolveSession(targetName, in: socketState)
+            }
+        }
+        state.setSocketState(socketState, named: socketName)
+        try stateStore.save(state)
+        return ShellraiserCommandResult()
     }
 
     /// Executes `tmux kill-pane`.
