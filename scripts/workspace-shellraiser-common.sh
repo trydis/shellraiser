@@ -493,6 +493,7 @@ end run
 APPLESCRIPT
     )"; then
         fail_with_message "Shellraiser workspace deletion failed for '$workspace_root'."
+        return 1
     fi
 
     printf '%s\n' "$result"
