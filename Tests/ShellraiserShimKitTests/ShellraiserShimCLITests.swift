@@ -35,6 +35,7 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(controller.sentKeyEvents.first?.0, "surface-1")
         XCTAssertEqual(controller.sentKeyEvents.first?.1, "enter")
         XCTAssertEqual(try store.load().sessionsByName["coord"]?.panes.map(\.paneId), ["%1"])
+        XCTAssertEqual(try store.load().sessionsByName["coord"]?.ownsWorkspace, true)
     }
 
     /// Verifies `tmux new-session -P -F` prints the requested tmux format for Claude probes.
@@ -59,6 +60,27 @@ final class ShellraiserShimCLITests: XCTestCase {
         XCTAssertEqual(try store.load().socketState(named: "claude-swarm-1").sessionsByName["claude-swarm"]?.panes.first?.windowName, "swarm-view")
         XCTAssertTrue(controller.sentTextEvents.isEmpty)
         XCTAssertTrue(controller.sentKeyEvents.isEmpty)
+    }
+
+    /// Verifies `tmux new-session` attaches to the originating workspace when launched from a managed surface.
+    func testTmuxNewSessionAttachesToOriginWorkspaceWhenSurfaceContextExists() throws {
+        setenv("SHELLRAISER_SURFACE_ID", "surface-1", 1)
+        defer { unsetenv("SHELLRAISER_SURFACE_ID") }
+
+        let controller = MockShellraiserController()
+        let store = InMemoryTmuxShimStateStore()
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["new-session", "-d", "-s", "claude-swarm", "-n", "swarm-view"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "%1\n")
+        XCTAssertNil(controller.createdWorkspaceName)
+        XCTAssertEqual(controller.splitEvents.count, 1)
+        XCTAssertEqual(controller.splitEvents.first?.0, "surface-1")
+        XCTAssertEqual(controller.splitEvents.first?.1, .right)
+        XCTAssertEqual(try store.load().sessionsByName["claude-swarm"]?.workspaceId, "workspace-1")
+        XCTAssertEqual(try store.load().sessionsByName["claude-swarm"]?.ownsWorkspace, false)
     }
 
     /// Verifies `tmux -V` succeeds for Claude's compatibility probe.
@@ -435,6 +457,59 @@ final class ShellraiserShimCLITests: XCTestCase {
         let result = cli.run(arguments: ["has-session", "-t", "coord"])
 
         XCTAssertEqual(result.exitCode, 1)
+    }
+
+    /// Verifies `tmux kill-session` closes only spawned teammate panes when the session is attached to an existing workspace.
+    func testTmuxKillSessionClosesSpawnedPanesWithoutClosingOriginWorkspace() throws {
+        let controller = MockShellraiserController(
+            surfaces: [
+                ShellraiserSurfaceSnapshot(
+                    id: "surface-1",
+                    title: "lead",
+                    workingDirectory: "/tmp/project",
+                    workspaceId: "workspace-1",
+                    workspaceName: "coord"
+                ),
+                ShellraiserSurfaceSnapshot(
+                    id: "surface-2",
+                    title: "teammate-1",
+                    workingDirectory: "/tmp/project",
+                    workspaceId: "workspace-1",
+                    workspaceName: "coord"
+                ),
+                ShellraiserSurfaceSnapshot(
+                    id: "surface-3",
+                    title: "teammate-2",
+                    workingDirectory: "/tmp/project",
+                    workspaceId: "workspace-1",
+                    workspaceName: "coord"
+                )
+            ]
+        )
+        let store = InMemoryTmuxShimStateStore(
+            state: TmuxShimState(
+                sessionsByName: [
+                    "claude-swarm": TmuxShimSession(
+                        name: "claude-swarm",
+                        workspaceId: "workspace-1",
+                        panes: [
+                            TmuxShimPane(paneId: "%1", surfaceId: "surface-2", windowName: "swarm-view"),
+                            TmuxShimPane(paneId: "%2", surfaceId: "surface-3", windowName: "swarm-view")
+                        ],
+                        focusedPaneId: "%2",
+                        ownsWorkspace: false
+                    )
+                ]
+            )
+        )
+        let cli = TmuxShimCLI(controller: controller, stateStore: store)
+
+        let result = cli.run(arguments: ["kill-session", "-t", "claude-swarm"])
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(controller.closedSurfaceIDs, ["surface-2", "surface-3"])
+        XCTAssertTrue(controller.closedWorkspaceIDs.isEmpty)
+        XCTAssertTrue(try store.load().sessionsByName.isEmpty)
     }
 
     /// Verifies `tmux a` focuses the active pane in the socket-scoped session.

@@ -128,6 +128,14 @@ public struct TmuxShimSocketState: Codable, Equatable {
 
 /// One tmux-visible session tracked by the shim.
 public struct TmuxShimSession: Codable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case workspaceId
+        case panes
+        case focusedPaneId
+        case ownsWorkspace
+    }
+
     /// tmux-visible session name.
     public var name: String
 
@@ -140,12 +148,42 @@ public struct TmuxShimSession: Codable, Equatable {
     /// Currently focused pane identifier when known.
     public var focusedPaneId: String?
 
+    /// Whether this shim session owns the backing workspace lifecycle.
+    public var ownsWorkspace: Bool
+
     /// Creates a session value from explicit fields.
-    public init(name: String, workspaceId: String, panes: [TmuxShimPane], focusedPaneId: String?) {
+    public init(
+        name: String,
+        workspaceId: String,
+        panes: [TmuxShimPane],
+        focusedPaneId: String?,
+        ownsWorkspace: Bool = true
+    ) {
         self.name = name
         self.workspaceId = workspaceId
         self.panes = panes
         self.focusedPaneId = focusedPaneId
+        self.ownsWorkspace = ownsWorkspace
+    }
+
+    /// Decodes sessions while defaulting older state files to workspace-owned behavior.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        workspaceId = try container.decode(String.self, forKey: .workspaceId)
+        panes = try container.decode([TmuxShimPane].self, forKey: .panes)
+        focusedPaneId = try container.decodeIfPresent(String.self, forKey: .focusedPaneId)
+        ownsWorkspace = try container.decodeIfPresent(Bool.self, forKey: .ownsWorkspace) ?? true
+    }
+
+    /// Encodes sessions with explicit workspace ownership.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(workspaceId, forKey: .workspaceId)
+        try container.encode(panes, forKey: .panes)
+        try container.encodeIfPresent(focusedPaneId, forKey: .focusedPaneId)
+        try container.encode(ownsWorkspace, forKey: .ownsWorkspace)
     }
 }
 
@@ -358,7 +396,7 @@ public struct TmuxShimCLI {
             throw ShellraiserControlError("Session already exists: \(sessionName)")
         }
 
-        let created = try controller.createWorkspace(name: sessionName, workingDirectory: nil)
+        let created = try createSessionSurface(for: sessionName)
         let pane = TmuxShimPane(
             paneId: allocatePaneID(in: &socketState),
             surfaceId: created.surface.id,
@@ -368,7 +406,8 @@ public struct TmuxShimCLI {
             name: sessionName,
             workspaceId: created.workspace.id,
             panes: [pane],
-            focusedPaneId: pane.paneId
+            focusedPaneId: pane.paneId,
+            ownsWorkspace: created.ownsWorkspace
         )
         socketState.sessionsByName[sessionName] = session
         state.setSocketState(socketState, named: socketName)
@@ -386,6 +425,55 @@ public struct TmuxShimCLI {
             surface: created.surface
         )
         return ShellraiserCommandResult(standardOutput: outputLine + "\n")
+    }
+
+    /// Creates the first teammate surface for one tmux session, attaching to the current workspace when possible.
+    private func createSessionSurface(for sessionName: String) throws -> (
+        workspace: ShellraiserWorkspaceSnapshot,
+        surface: ShellraiserSurfaceSnapshot,
+        ownsWorkspace: Bool
+    ) {
+        if let attached = try attachedWorkspaceCreationContext() {
+            return attached
+        }
+
+        let created = try controller.createWorkspace(name: sessionName, workingDirectory: nil)
+        return (created.workspace, created.surface, true)
+    }
+
+    /// Returns one workspace-attached creation context when the shim is invoked from a managed Shellraiser surface.
+    private func attachedWorkspaceCreationContext() throws -> (
+        workspace: ShellraiserWorkspaceSnapshot,
+        surface: ShellraiserSurfaceSnapshot,
+        ownsWorkspace: Bool
+    )? {
+        guard let rawSurfaceID = ProcessInfo.processInfo.environment["SHELLRAISER_SURFACE_ID"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawSurfaceID.isEmpty,
+              let originSurface = try controller.surface(withID: rawSurfaceID),
+              let workspaceID = originSurface.workspaceId else {
+            return nil
+        }
+
+        let workspaceName = originSurface.workspaceName ?? "Workspace"
+        let workspace = ShellraiserWorkspaceSnapshot(
+            id: workspaceID,
+            name: workspaceName,
+            selectedSurfaceId: originSurface.id
+        )
+        let createdSurface = try controller.splitSurface(
+            id: originSurface.id,
+            direction: .right,
+            workingDirectory: nil
+        )
+        let normalizedSurface = ShellraiserSurfaceSnapshot(
+            id: createdSurface.id,
+            title: createdSurface.title,
+            workingDirectory: createdSurface.workingDirectory,
+            workspaceId: createdSurface.workspaceId ?? workspaceID,
+            workspaceName: createdSurface.workspaceName ?? workspaceName
+        )
+        return (workspace, normalizedSurface, false)
     }
 
     /// Executes `tmux split-window`.
@@ -669,7 +757,15 @@ public struct TmuxShimCLI {
         guard let session = socketState.sessionsByName.removeValue(forKey: sessionName) else {
             throw ShellraiserControlError("Unknown session: \(sessionName)")
         }
-        try controller.closeWorkspace(id: session.workspaceId)
+
+        if session.ownsWorkspace {
+            try controller.closeWorkspace(id: session.workspaceId)
+        } else {
+            for pane in session.panes {
+                try controller.closeSurface(id: pane.surfaceId)
+            }
+        }
+
         state.setSocketState(socketState, named: socketName)
         try stateStore.save(state)
         return ShellraiserCommandResult()
