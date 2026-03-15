@@ -55,11 +55,11 @@ enter_prepared_worktree() {
 main() {
     local repo_root worktree_name worktree_root branch_name worktree_status
 
-    repo_root="$(resolve_repo_root)"
-    worktree_name="$(resolve_worktree_name "$@")"
+    repo_root="$(resolve_repo_root)" || return 1
+    worktree_name="$(resolve_worktree_name "$@")" || return 1
     IFS=$'\t' read -r worktree_root branch_name worktree_status < <(
         prepare_workspace_worktree_with_status "$repo_root" "$worktree_name"
-    )
+    ) || return 1
     [[ -n "$worktree_root" && -n "$branch_name" && -n "$worktree_status" ]] \
         || fail_with_message "Failed to resolve the worktree path."
 
