@@ -35,23 +35,6 @@ extension WorkspaceManager {
                 "enqueue workspace=\(workspaceId.uuidString) surface=\(surfaceId.uuidString) sequence=\(sequence)"
             )
 
-            if isSurfaceCurrentlyFocused(surfaceId) {
-                CompletionDebugLogger.log(
-                    "auto-handle focused completion surface=\(surfaceId.uuidString)"
-                )
-                let didHandleCompletion = surfaceManager.clearPendingCompletion(
-                    workspaceId: workspaceId,
-                    surfaceId: surfaceId,
-                    workspaces: &workspaces,
-                    persistence: persistence
-                )
-                if didHandleCompletion {
-                    markRecentlyHandled(surfaceId: surfaceId)
-                }
-                completionNotifications.removeNotifications(for: surfaceId)
-                return
-            }
-
             if let target = pendingCompletionTarget(surfaceId: surfaceId),
                let workspace = workspace(id: workspaceId),
                shouldScheduleCompletionNotification(for: surfaceId) {
@@ -134,6 +117,13 @@ extension WorkspaceManager {
 
         switch event.phase {
         case .started:
+            surfaceManager.clearPendingCompletion(
+                workspaceId: target.workspaceId,
+                surfaceId: event.surfaceId,
+                workspaces: &workspaces,
+                persistence: persistence
+            )
+            completionNotifications.removeNotifications(for: event.surfaceId)
             guard event.agentType != .codex else { return }
             markSurfaceBusy(event.surfaceId)
         case .completed:

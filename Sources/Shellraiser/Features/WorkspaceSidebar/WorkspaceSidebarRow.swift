@@ -110,7 +110,7 @@ struct WorkspaceSidebarRow: View {
     private var statusRow: some View {
         HStack(spacing: 10) {
             if pendingCount > 0 {
-                WorkspacePendingIndicator()
+                WorkspacePendingIndicator(count: pendingCount)
             }
 
             Spacer(minLength: 0)
@@ -220,19 +220,26 @@ private struct WorkspaceWorkingIndicator: View {
 
 /// Animated bell shown while a workspace owns queued completions.
 private struct WorkspacePendingIndicator: View {
+    let count: Int
+
     @ViewBuilder
     var body: some View {
-        if #available(macOS 15.0, *) {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.highlight)
-                .symbolEffect(.bounce.up.byLayer, options: .repeat(.continuous))
-                .accessibilityLabel("Workspace has pending completions")
-        } else {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.highlight)
-                .accessibilityLabel("Workspace has pending completions")
+        HStack(spacing: 4) {
+            if #available(macOS 15.0, *) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.highlight)
+                    .symbolEffect(.bounce.up.byLayer, options: .repeat(.continuous))
+            } else {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.highlight)
+            }
+
+            Text("\(count)")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
         }
+        .accessibilityLabel("Workspace has \(count) pending completion\(count == 1 ? "" : "s")")
     }
 }
