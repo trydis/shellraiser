@@ -256,33 +256,30 @@ struct PaneLeafView: View {
             }
 
             if let searchState {
-                VStack(spacing: 0) {
-                    TerminalSearchOverlay(
-                        searchState: searchState,
-                        onNavigateNext: {
-                            guard let surfaceId = activeSurface?.id else { return }
-                            GhosttyRuntime.shared.performBindingAction(
-                                surfaceId: surfaceId,
-                                action: "navigate_search:next"
-                            )
-                        },
-                        onNavigatePrevious: {
-                            guard let surfaceId = activeSurface?.id else { return }
-                            GhosttyRuntime.shared.performBindingAction(
-                                surfaceId: surfaceId,
-                                action: "navigate_search:previous"
-                            )
-                        },
-                        onClose: {
-                            guard let surfaceId = activeSurface?.id else { return }
-                            GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
-                        }
-                    )
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                TerminalSearchOverlay(
+                    searchState: searchState,
+                    onNavigateNext: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.performBindingAction(
+                            surfaceId: surfaceId,
+                            action: "navigate_search:next"
+                        )
+                    },
+                    onNavigatePrevious: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.performBindingAction(
+                            surfaceId: surfaceId,
+                            action: "navigate_search:previous"
+                        )
+                    },
+                    onClose: {
+                        guard let surfaceId = activeSurface?.id else { return }
+                        GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
+                    }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 20)
+                .padding(.top, 14)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

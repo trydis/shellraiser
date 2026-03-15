@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full-width search bar that appears at the top of an active terminal pane.
+/// Compact search panel that floats over the top-right corner of the active terminal pane.
 struct TerminalSearchOverlay: View {
     /// Live search state shared with the runtime.
     @ObservedObject var searchState: SurfaceSearchState
@@ -18,6 +18,7 @@ struct TerminalSearchOverlay: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            // Search icon + text field + match count
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .medium))
@@ -27,6 +28,7 @@ struct TerminalSearchOverlay: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.textPrimary)
+                    .frame(minWidth: 150)
                     .focused($isTextFieldFocused)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) {
@@ -48,11 +50,15 @@ struct TerminalSearchOverlay: View {
                         .animation(nil, value: total)
                 }
             }
-            .padding(.leading, 12)
+            .padding(.leading, 10)
 
-            Spacer()
-
+            // Separator + navigation + close buttons
             HStack(spacing: 1) {
+                Rectangle()
+                    .fill(AppTheme.stroke)
+                    .frame(width: 1, height: 14)
+                    .padding(.horizontal, 6)
+
                 SearchNavButton(systemImage: "chevron.up", action: onNavigatePrevious)
                     .help("Previous match")
                 SearchNavButton(systemImage: "chevron.down", action: onNavigateNext)
@@ -61,22 +67,23 @@ struct TerminalSearchOverlay: View {
                 Rectangle()
                     .fill(AppTheme.stroke)
                     .frame(width: 1, height: 14)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 4)
 
                 SearchNavButton(systemImage: "xmark", action: onClose)
                     .help("Close search")
             }
-            .padding(.trailing, 8)
+            .padding(.trailing, 6)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 34)
-        .background(Color(nsColor: NSColor(calibratedRed: 0.14, green: 0.15, blue: 0.20, alpha: 1.0)))
-        .clipShape(TopRoundedShape(radius: 10))
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(AppTheme.stroke)
-                .frame(height: 1)
-        }
+        .frame(height: 30)
+        .background(
+            Color(nsColor: NSColor(calibratedRed: 0.16, green: 0.17, blue: 0.22, alpha: 0.97))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(AppTheme.stroke, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
         .onAppear {
             isTextFieldFocused = true
         }
@@ -100,41 +107,12 @@ private struct SearchNavButton: View {
 private struct SearchNavButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(AppTheme.textPrimary.opacity(configuration.isPressed ? 0.45 : 0.72))
-            .frame(width: 26, height: 26)
+            .foregroundStyle(AppTheme.textPrimary.opacity(configuration.isPressed ? 0.40 : 0.70))
+            .frame(width: 24, height: 24)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(Color.white.opacity(configuration.isPressed ? 0.10 : 0))
             )
             .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
-    }
-}
-
-/// Rectangle with rounded top corners and square bottom corners.
-private struct TopRoundedShape: Shape {
-    let radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
-            path.addArc(
-                center: CGPoint(x: rect.minX + radius, y: rect.minY + radius),
-                radius: radius,
-                startAngle: .degrees(180),
-                endAngle: .degrees(270),
-                clockwise: false
-            )
-            path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-            path.addArc(
-                center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
-                radius: radius,
-                startAngle: .degrees(270),
-                endAngle: .degrees(0),
-                clockwise: false
-            )
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.closeSubpath()
-        }
     }
 }
