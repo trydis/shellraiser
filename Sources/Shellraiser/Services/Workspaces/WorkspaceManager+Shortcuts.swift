@@ -99,6 +99,10 @@ extension WorkspaceManager {
             return performFocusedPaneCommand(.newSurface)
         }
 
+        if key == "f", !hasShift {
+            return performFocusedSurfaceBindingAction("start_search")
+        }
+
         if !hasShift, let index = Int(key), (1...9).contains(index) {
             selectWorkspace(atDisplayIndex: index)
             return true

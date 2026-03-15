@@ -38,6 +38,7 @@ extension WorkspaceManager {
             persistence: persistence
         )
         completionNotifications.removeNotifications(for: surfaceId)
+        GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
         clearBusySurface(surfaceId)
         clearLiveCodexSessionSurface(surfaceId)

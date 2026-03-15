@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 #if canImport(GhosttyKit)
 import GhosttyKit
@@ -31,6 +32,7 @@ final class GhosttyRuntime {
         let onTitleChange: (String) -> Void
         let onWorkingDirectoryChange: (String) -> Void
         let onChildExited: () -> Void
+        let onSearchStateChange: (SurfaceSearchState?) -> Void
     }
 
     /// Pasteboard targets supported by the embedded host.
@@ -88,10 +90,15 @@ final class GhosttyRuntime {
     private var releasedSurfaceIds: Set<UUID> = []
     private var pendingFocusedSurfaceId: UUID?
 
+    private var searchStateBySurfaceId: [UUID: SurfaceSearchState] = [:]
+    private var searchNeedleCancellables: [UUID: AnyCancellable] = [:]
+
     private var appDidBecomeActiveObserver: NSObjectProtocol?
     private var appDidResignActiveObserver: NSObjectProtocol?
 
-    /// Registers callbacks for a surface model identifier.
+    /// Registers surface callbacks, preserving any existing search state callback.
+    ///
+    /// Used by `LibghosttySurfaceView` which is not aware of the search layer.
     func registerSurfaceCallbacks(
         surfaceId: UUID,
         onIdleNotification: @escaping () -> Void,
@@ -99,11 +106,32 @@ final class GhosttyRuntime {
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void
     ) {
+        let existingSearch = callbacksBySurfaceId[surfaceId]?.onSearchStateChange ?? { _ in }
+        registerSurfaceCallbacks(
+            surfaceId: surfaceId,
+            onIdleNotification: onIdleNotification,
+            onTitleChange: onTitleChange,
+            onWorkingDirectoryChange: onWorkingDirectoryChange,
+            onChildExited: onChildExited,
+            onSearchStateChange: existingSearch
+        )
+    }
+
+    /// Registers all callbacks for a surface model identifier, including the search state callback.
+    func registerSurfaceCallbacks(
+        surfaceId: UUID,
+        onIdleNotification: @escaping () -> Void,
+        onTitleChange: @escaping (String) -> Void,
+        onWorkingDirectoryChange: @escaping (String) -> Void,
+        onChildExited: @escaping () -> Void,
+        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void
+    ) {
         callbacksBySurfaceId[surfaceId] = SurfaceCallbacks(
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onSearchStateChange: onSearchStateChange
         )
     }
 
@@ -117,14 +145,16 @@ final class GhosttyRuntime {
         onTitleChange: @escaping (String) -> Void,
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
-        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void
+        onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
+        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void
     ) -> LibghosttySurfaceView {
         registerSurfaceCallbacks(
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
             onTitleChange: onTitleChange,
             onWorkingDirectoryChange: onWorkingDirectoryChange,
-            onChildExited: onChildExited
+            onChildExited: onChildExited,
+            onSearchStateChange: onSearchStateChange
         )
         releasedSurfaceIds.remove(surfaceModel.id)
 
@@ -187,6 +217,8 @@ final class GhosttyRuntime {
         releasedSurfaceIds.remove(surfaceId)
         callbacksBySurfaceId.removeValue(forKey: surfaceId)
         mountedHostCountsBySurfaceId.removeValue(forKey: surfaceId)
+        searchNeedleCancellables.removeValue(forKey: surfaceId)
+        searchStateBySurfaceId.removeValue(forKey: surfaceId)
 
         if let host = hostViewsBySurfaceId.removeValue(forKey: surfaceId) {
             host.shutdown()
@@ -196,6 +228,47 @@ final class GhosttyRuntime {
         if let surface = surfaceHandlesById[surfaceId] {
             destroySurface(handle: surface)
         }
+    }
+
+    /// Starts an in-terminal search session for a surface with an optional initial needle.
+    func startSearch(surfaceId: UUID, needle: String) {
+        let state = SurfaceSearchState(needle: needle)
+        searchStateBySurfaceId[surfaceId] = state
+
+        let cancellable = state.$needle
+            .removeDuplicates()
+            .map { needle -> AnyPublisher<String, Never> in
+                if needle.count < 3 {
+                    return Just(needle)
+                        .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
+                        .eraseToAnyPublisher()
+                } else {
+                    return Just(needle).eraseToAnyPublisher()
+                }
+            }
+            .switchToLatest()
+            .sink { [weak self] needle in
+                DispatchQueue.main.async { [weak self] in
+                    _ = self?.performBindingAction(surfaceId: surfaceId, action: "search:\(needle)")
+                }
+            }
+        searchNeedleCancellables[surfaceId] = cancellable
+
+        callbacksBySurfaceId[surfaceId]?.onSearchStateChange(state)
+    }
+
+    /// Ends the active in-terminal search session for a surface and cleans up state.
+    func endSearch(surfaceId: UUID) {
+        guard searchStateBySurfaceId[surfaceId] != nil else { return }
+        _ = performBindingAction(surfaceId: surfaceId, action: "end_search")
+        searchNeedleCancellables.removeValue(forKey: surfaceId)
+        searchStateBySurfaceId.removeValue(forKey: surfaceId)
+        callbacksBySurfaceId[surfaceId]?.onSearchStateChange(nil)
+    }
+
+    /// Returns the active search state for a surface, if any.
+    func searchState(for surfaceId: UUID) -> SurfaceSearchState? {
+        searchStateBySurfaceId[surfaceId]
     }
 
     /// Creates a new libghostty surface associated with an AppKit host view.
@@ -801,6 +874,47 @@ final class GhosttyRuntime {
         case GHOSTTY_ACTION_COLOR_CHANGE:
             DispatchQueue.main.async {
                 runtime.notifyAppearanceDidChange()
+            }
+            return true
+        case GHOSTTY_ACTION_START_SEARCH:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
+                runtime.startSearch(surfaceId: surfaceId, needle: needle)
+            }
+            return true
+        case GHOSTTY_ACTION_END_SEARCH:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
+                runtime.searchNeedleCancellables.removeValue(forKey: surfaceId)
+                runtime.searchStateBySurfaceId.removeValue(forKey: surfaceId)
+                runtime.callbacksBySurfaceId[surfaceId]?.onSearchStateChange(nil)
+            }
+            return true
+        case GHOSTTY_ACTION_SEARCH_TOTAL:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let rawTotal = action.action.search_total.total
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
+                runtime.searchStateBySurfaceId[surfaceId]?.total = rawTotal < 0 ? nil : UInt(rawTotal)
+            }
+            return true
+        case GHOSTTY_ACTION_SEARCH_SELECTED:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let rawSelected = action.action.search_selected.selected
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
+                runtime.searchStateBySurfaceId[surfaceId]?.selected = rawSelected < 0 ? nil : UInt(rawSelected)
             }
             return true
         default:
