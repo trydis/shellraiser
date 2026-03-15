@@ -156,12 +156,14 @@ extension WorkspaceManager {
         if let report {
             progressBySurfaceId[surfaceId] = report
             progressClearTimers[surfaceId]?.invalidate()
-            progressClearTimers[surfaceId] = Timer.scheduledTimer(withTimeInterval: Self.progressAutoClearInterval, repeats: false) { [weak self] _ in
+            let timer = Timer(timeInterval: Self.progressAutoClearInterval, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.progressBySurfaceId.removeValue(forKey: surfaceId)
                     self?.progressClearTimers.removeValue(forKey: surfaceId)
                 }
             }
+            RunLoop.main.add(timer, forMode: .common)
+            progressClearTimers[surfaceId] = timer
         } else {
             clearProgressReport(surfaceId: surfaceId)
         }
