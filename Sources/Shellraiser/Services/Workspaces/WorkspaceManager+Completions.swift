@@ -43,6 +43,7 @@ extension WorkspaceManager {
                     workspaceName: workspace.name
                 )
             }
+            updateDockBadge()
         } else if !payload.isEmpty {
             surfaceManager.setAgentType(
                 workspaceId: workspaceId,
@@ -124,6 +125,7 @@ extension WorkspaceManager {
                 persistence: persistence
             )
             completionNotifications.removeNotifications(for: event.surfaceId)
+            updateDockBadge()
             guard event.agentType != .codex else { return }
             markSurfaceBusy(event.surfaceId)
         case .completed:
@@ -226,6 +228,12 @@ extension WorkspaceManager {
         case .codex:
             return (event.payload, nil)
         }
+    }
+
+    /// Updates the dock icon badge to reflect the current pending completion count.
+    func updateDockBadge() {
+        let count = pendingCompletionTargets().count
+        NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
     }
 
     /// Rebuilds the next FIFO sequence cursor from persisted surface metadata.

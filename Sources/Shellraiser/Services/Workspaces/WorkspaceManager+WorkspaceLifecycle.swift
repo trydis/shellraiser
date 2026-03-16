@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Workspace lifecycle and selection flows for the shared manager.
@@ -17,6 +18,7 @@ extension WorkspaceManager {
             persistence: persistence
         )
         synchronizePendingCompletionCursor()
+        updateDockBadge()
         refreshFocusedWorkspaceGitBranches()
         hasLoadedPersistedWorkspaces = true
     }
@@ -69,6 +71,7 @@ extension WorkspaceManager {
             GhosttyRuntime.shared.releaseSurface(surfaceId: $0)
             clearGitBranch(surfaceId: $0)
         }
+        updateDockBadge()
     }
 
     /// Requests deletion for a workspace and asks for confirmation when live terminals exist.
