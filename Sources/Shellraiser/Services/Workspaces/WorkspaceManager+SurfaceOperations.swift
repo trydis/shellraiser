@@ -38,6 +38,7 @@ extension WorkspaceManager {
             persistence: persistence
         )
         completionNotifications.removeNotifications(for: surfaceId)
+        updateDockBadge()
         GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
         clearBusySurface(surfaceId)
@@ -75,6 +76,7 @@ extension WorkspaceManager {
             markRecentlyHandled(surfaceId: surfaceId)
         }
         completionNotifications.removeNotifications(for: surfaceId)
+        updateDockBadge()
         GhosttyRuntime.shared.focusSurfaceHost(surfaceId: surfaceId)
 
         if let workspace = workspace(id: workspaceId),
