@@ -327,6 +327,7 @@ struct PaneLeafView: View {
                                 .opacity(isHoveringURLLeft ? 1 : 0)
                         }
                     }
+                    .allowsHitTesting(false)
 
                     HStack {
                         VStack(alignment: .leading) {
@@ -347,7 +348,6 @@ struct PaneLeafView: View {
                         Spacer()
                     }
                 }
-                .allowsHitTesting(!isHoveringURLLeft)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
