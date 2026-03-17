@@ -450,8 +450,8 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             onChildExited: onChildExited,
             onProgressReport: onProgressReport
         )
-        applyGhosttyBackgroundStyle()
         updateScaleAndSize()
+        applyGhosttyBackgroundStyle()
     }
 
     /// Releases any owned libghostty surface resources.

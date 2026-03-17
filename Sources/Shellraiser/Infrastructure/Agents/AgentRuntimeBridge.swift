@@ -566,7 +566,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zshrc"
         fi
 
-        if [[ -n "$GHOSTTY_RESOURCES_DIR" ]]; then
+        if [[ -n "$GHOSTTY_RESOURCES_DIR" ]] && [[ -r "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration" ]]; then
             source "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration"
         fi
 
