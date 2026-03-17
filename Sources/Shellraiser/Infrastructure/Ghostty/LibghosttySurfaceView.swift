@@ -9,6 +9,8 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
     private var terminalConfig: TerminalPanelConfig
 
     private var surfaceHandle: ghostty_surface_t?
+    /// Active cursor shape for this surface, updated via libghostty MOUSE_SHAPE actions.
+    private var currentCursor: NSCursor = .iBeam
     private var onActivate: () -> Void
     private var onIdleNotification: () -> Void
     private var onInput: (SurfaceInputEvent) -> Void
@@ -103,6 +105,61 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         super.viewDidChangeBackingProperties()
         updateScaleAndSize()
         updateDisplayIdentifier()
+    }
+
+    /// Registers the active cursor for the entire bounds of the surface.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: currentCursor)
+    }
+
+    /// Updates the displayed cursor shape in response to a libghostty MOUSE_SHAPE action.
+    func setCursorShape(_ shape: ghostty_action_mouse_shape_e) {
+        currentCursor = Self.nsCursor(for: shape)
+        window?.invalidateCursorRects(for: self)
+    }
+
+    /// Maps a Ghostty cursor shape enum value to the closest available NSCursor.
+    private static func nsCursor(for shape: ghostty_action_mouse_shape_e) -> NSCursor {
+        switch shape {
+        case GHOSTTY_MOUSE_SHAPE_DEFAULT:
+            return .arrow
+        case GHOSTTY_MOUSE_SHAPE_TEXT:
+            return .iBeam
+        case GHOSTTY_MOUSE_SHAPE_POINTER:
+            return .pointingHand
+        case GHOSTTY_MOUSE_SHAPE_GRAB:
+            return .openHand
+        case GHOSTTY_MOUSE_SHAPE_GRABBING:
+            return .closedHand
+        case GHOSTTY_MOUSE_SHAPE_VERTICAL_TEXT:
+            return .iBeamCursorForVerticalLayout
+        case GHOSTTY_MOUSE_SHAPE_CONTEXT_MENU:
+            return .contextualMenu
+        case GHOSTTY_MOUSE_SHAPE_CROSSHAIR:
+            return .crosshair
+        case GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED:
+            return .operationNotAllowed
+        case GHOSTTY_MOUSE_SHAPE_W_RESIZE:
+            if #available(macOS 15.0, *) { return .columnResize(directions: .left) }
+            return .resizeLeft
+        case GHOSTTY_MOUSE_SHAPE_E_RESIZE:
+            if #available(macOS 15.0, *) { return .columnResize(directions: .right) }
+            return .resizeRight
+        case GHOSTTY_MOUSE_SHAPE_N_RESIZE:
+            if #available(macOS 15.0, *) { return .rowResize(directions: .up) }
+            return .resizeUp
+        case GHOSTTY_MOUSE_SHAPE_S_RESIZE:
+            if #available(macOS 15.0, *) { return .rowResize(directions: .down) }
+            return .resizeDown
+        case GHOSTTY_MOUSE_SHAPE_NS_RESIZE:
+            if #available(macOS 15.0, *) { return .rowResize }
+            return .resizeUpDown
+        case GHOSTTY_MOUSE_SHAPE_EW_RESIZE:
+            if #available(macOS 15.0, *) { return .columnResize }
+            return .resizeLeftRight
+        default:
+            return .arrow
+        }
     }
 
     /// Rebuilds tracking regions so Ghostty receives hover and motion events.

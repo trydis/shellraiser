@@ -82,6 +82,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
     let onPaneNavigationRequest: (PaneNodeModel.PaneFocusDirection) -> Void
     let onProgressReport: (SurfaceProgressReport?) -> Void
     let onSearchStateChange: (SurfaceSearchState?) -> Void
+    let onHoverUrlChange: (String?) -> Void
 
     /// Builds the AppKit surface host.
     func makeNSView(context: Context) -> NSView {
@@ -98,7 +99,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest,
             onProgressReport: onProgressReport,
-            onSearchStateChange: onSearchStateChange
+            onSearchStateChange: onSearchStateChange,
+            onHoverUrlChange: onHoverUrlChange
         )
         Self.syncContainerView(
             containerView,
@@ -139,7 +141,8 @@ struct GhosttyTerminalView: NSViewRepresentable {
             onChildExited: onChildExited,
             onPaneNavigationRequest: onPaneNavigationRequest,
             onProgressReport: onProgressReport,
-            onSearchStateChange: onSearchStateChange
+            onSearchStateChange: onSearchStateChange,
+            onHoverUrlChange: onHoverUrlChange
         )
         Self.syncContainerView(
             container,
