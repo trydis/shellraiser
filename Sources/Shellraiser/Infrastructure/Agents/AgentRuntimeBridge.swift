@@ -566,6 +566,10 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             source "$HOME/.zshrc"
         fi
 
+        if [[ -n "$GHOSTTY_RESOURCES_DIR" ]] && [[ -r "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration" ]]; then
+            source "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration"
+        fi
+
         export PATH="${SHELLRAISER_WRAPPER_BIN}:${PATH:-${SHELLRAISER_ORIGINAL_PATH}}"
         export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
         """#

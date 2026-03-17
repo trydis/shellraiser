@@ -16,9 +16,19 @@ ISOLATED_APP_PATH := $(ISOLATED_DERIVED_DATA)/Build/Products/$(CONFIGURATION)/$(
 
 build-app:
 	xcodebuild $(BUILD_FLAGS) -derivedDataPath $(DERIVED_DATA) build
+	@test -d ghostty/zig-out/share/ghostty || (echo "Error: ghostty/zig-out/share/ghostty not found. Run 'zig build' in the ghostty directory first." && exit 1)
+	@test -d ghostty/zig-out/share/terminfo || (echo "Error: ghostty/zig-out/share/terminfo not found. Run 'zig build' in the ghostty directory first." && exit 1)
+	rm -rf $(APP_PATH)/Contents/Resources/ghostty $(APP_PATH)/Contents/Resources/terminfo
+	cp -R ghostty/zig-out/share/ghostty $(APP_PATH)/Contents/Resources/ghostty
+	cp -R ghostty/zig-out/share/terminfo $(APP_PATH)/Contents/Resources/terminfo
 
 build-isolated:
 	xcodebuild $(ISOLATED_BUILD_FLAGS) -derivedDataPath $(ISOLATED_DERIVED_DATA) build
+	@test -d ghostty/zig-out/share/ghostty || (echo "Error: ghostty/zig-out/share/ghostty not found. Run 'zig build' in the ghostty directory first." && exit 1)
+	@test -d ghostty/zig-out/share/terminfo || (echo "Error: ghostty/zig-out/share/terminfo not found. Run 'zig build' in the ghostty directory first." && exit 1)
+	rm -rf $(ISOLATED_APP_PATH)/Contents/Resources/ghostty $(ISOLATED_APP_PATH)/Contents/Resources/terminfo
+	cp -R ghostty/zig-out/share/ghostty $(ISOLATED_APP_PATH)/Contents/Resources/ghostty
+	cp -R ghostty/zig-out/share/terminfo $(ISOLATED_APP_PATH)/Contents/Resources/terminfo
 
 run: build-app
 	open $(APP_PATH)
