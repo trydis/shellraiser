@@ -5,7 +5,10 @@ import XCTest
 /// Covers terminal launch command construction for Ghostty surfaces.
 @MainActor
 final class GhosttyRuntimeCommandTests: XCTestCase {
-    /// Verifies Shellraiser wraps the requested shell with an explicit directory change.
+    /// Verifies Shellraiser passes the shell directly without a working-directory wrapper.
+    ///
+    /// Working directory is delegated to Ghostty via `config.working_directory`; no
+    /// `/bin/sh -lc "cd …"` wrapper is needed.
     func testLaunchCommandWrapsShellWithWorkingDirectoryChange() {
         let config = TerminalPanelConfig(
             workingDirectory: "/tmp/project",
@@ -14,13 +17,16 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         )
 
         let command = GhosttyRuntime.launchCommand(for: config)
-        XCTAssertTrue(command.contains("/bin/sh"))
-        XCTAssertTrue(command.contains("cd --"))
-        XCTAssertTrue(command.contains("/tmp/project"))
-        XCTAssertTrue(command.contains("/bin/zsh"))
+        XCTAssertEqual(command, "'/bin/zsh'")
+        XCTAssertFalse(command.contains("/bin/sh"))
+        XCTAssertFalse(command.contains("cd --"))
+        XCTAssertFalse(command.contains("/tmp/project"))
     }
 
-    /// Verifies working-directory wrapper preserves significant leading and trailing spaces.
+    /// Verifies working directory is not embedded in the launch command regardless of its value.
+    ///
+    /// Ghostty receives the working directory via its own config channel; the launch command
+    /// only carries the shell path.
     func testLaunchCommandPreservesUntrimmedWorkingDirectoryInWrapper() {
         let config = TerminalPanelConfig(
             workingDirectory: "  /tmp/project with spaces  ",
@@ -29,7 +35,8 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         )
 
         let command = GhosttyRuntime.launchCommand(for: config)
-        XCTAssertTrue(command.contains("  /tmp/project with spaces  "))
+        XCTAssertEqual(command, "'/bin/zsh'")
+        XCTAssertFalse(command.contains("/tmp/project with spaces"))
     }
 
     /// Verifies whitespace-only working directories are treated as unspecified.

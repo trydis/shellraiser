@@ -52,13 +52,6 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
         self.onProgressReport = onProgressReport
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
-        wantsLayer = true
-        let metalLayer = CAMetalLayer()
-        metalLayer.isOpaque = true
-        layer = metalLayer
-        layer?.isOpaque = true
-        applyGhosttyBackgroundStyle()
-
         GhosttyRuntime.shared.registerSurfaceCallbacks(
             surfaceId: surfaceModel.id,
             onIdleNotification: onIdleNotification,
@@ -73,6 +66,7 @@ final class LibghosttySurfaceView: NSView, NSTextInputClient, NSMenuItemValidati
             terminalConfig: terminalConfig
         )
         updateScaleAndSize()
+        applyGhosttyBackgroundStyle()
     }
 
     @available(*, unavailable)

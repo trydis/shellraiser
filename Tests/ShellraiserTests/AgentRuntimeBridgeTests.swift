@@ -88,6 +88,24 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(codexWrapperContents.contains("wait \"$monitor_pid\" 2>/dev/null || true"))
     }
 
+    /// Verifies the zsh shim sources Ghostty shell integration when the runtime is active.
+    ///
+    /// The `.zshrc` shim must source `ghostty-integration` from `$GHOSTTY_RESOURCES_DIR`
+    /// so that Ghostty's shell-integration features (title, CWD, marks) work inside
+    /// Shellraiser-managed surfaces.
+    func testPrepareRuntimeSupportWritesZshRcShimWithGhosttyIntegrationSourcing() throws {
+        let bridge = try makeBridge()
+        let zshRcURL = bridge.zshShimDirectory.appendingPathComponent(".zshrc")
+
+        bridge.prepareRuntimeSupport()
+
+        let zshRcContents = try String(contentsOf: zshRcURL, encoding: .utf8)
+
+        XCTAssertTrue(zshRcContents.contains("GHOSTTY_RESOURCES_DIR"))
+        XCTAssertTrue(zshRcContents.contains("ghostty-integration"))
+        XCTAssertTrue(zshRcContents.contains("shell-integration/zsh/ghostty-integration"))
+    }
+
     /// Verifies the helper can extract Claude hook session identifiers from stdin payloads.
     func testPrepareRuntimeSupportWritesHelperWithClaudeHookSessionParsing() throws {
         let bridge = try makeBridge()

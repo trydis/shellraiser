@@ -1164,22 +1164,20 @@ final class GhosttyRuntime {
     }
 
     /// Creates the shell command passed into Ghostty surface creation from normalized inputs.
+    ///
+    /// Working directory and login-shell setup are handled natively by Ghostty via
+    /// `config.working_directory` and its `login(1)` integration, so no `/bin/sh -lc`
+    /// wrapper is needed here. Passing the shell directly lets Ghostty's `detectShell()`
+    /// recognise the executable and activate shell integration.
     private static func launchCommand(
         shell: String,
         workingDirectory: String?,
         executable: (command: String, arguments: [String])?
     ) -> String {
-        let executableInvocation = escapedExecutableInvocation(
+        escapedExecutableInvocation(
             command: executable?.command ?? shell,
             arguments: executable?.arguments ?? []
         )
-
-        guard let workingDirectory else {
-            return executableInvocation
-        }
-
-        let script = "cd -- \(workingDirectory.shellEscaped) || exit $?; exec \(executableInvocation)"
-        return "\("/bin/sh".shellEscaped) -lc \(script.shellEscaped)"
     }
 
     /// Resolves the executable used to reopen a managed agent session when its resume artifacts exist.
