@@ -94,6 +94,17 @@ final class ShellraiserAppDelegate: NSObject, NSApplicationDelegate {
         ShellraiserScriptingController.shared.insertSurfaceConfiguration(configuration)
     }
 
+    /// Brings the main window to front when the dock icon is clicked with no visible windows.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            for window in sender.windows where window.canBecomeMain {
+                window.makeKeyAndOrderFront(nil)
+                break
+            }
+        }
+        return true
+    }
+
     /// Intercepts standard app termination and requires explicit user confirmation.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard confirmQuit() else {
@@ -112,7 +123,17 @@ struct ShellraiserApp: App {
     @StateObject private var manager: WorkspaceManager
 
     /// Disables native macOS window tabbing so the app's own pane tabs remain the only tab UI.
+    /// Exits immediately if another instance with the same bundle ID is already running,
+    /// activating the existing instance instead — guards against Launch Services conflicts.
     init() {
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                .filter { $0 != .current }
+            if let existing = others.first {
+                existing.activate()
+                exit(0)
+            }
+        }
         NSWindow.allowsAutomaticWindowTabbing = false
         let manager = WorkspaceManager()
         _manager = StateObject(wrappedValue: manager)
@@ -120,7 +141,7 @@ struct ShellraiserApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Shellraiser", id: "main") {
             ContentView(manager: manager)
                 .frame(minWidth: 1100, minHeight: 760)
         }
