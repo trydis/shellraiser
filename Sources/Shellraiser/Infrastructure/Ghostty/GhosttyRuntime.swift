@@ -36,6 +36,7 @@ final class GhosttyRuntime {
         let onChildExited: () -> Void
         let onProgressReport: (SurfaceProgressReport?) -> Void
         let onSearchStateChange: (SurfaceSearchState?) -> Void
+        let onHoverUrlChange: (String?) -> Void
     }
 
     /// Pasteboard targets supported by the embedded host.
@@ -99,9 +100,9 @@ final class GhosttyRuntime {
     private var appDidBecomeActiveObserver: NSObjectProtocol?
     private var appDidResignActiveObserver: NSObjectProtocol?
 
-    /// Registers surface callbacks, preserving any existing search state callback.
+    /// Registers surface callbacks, preserving any existing search and hover URL callbacks.
     ///
-    /// Used by `LibghosttySurfaceView` which is not aware of the search layer.
+    /// Used by `LibghosttySurfaceView` which is not aware of the search or hover-URL layers.
     func registerSurfaceCallbacks(
         surfaceId: UUID,
         onIdleNotification: @escaping () -> Void,
@@ -111,6 +112,7 @@ final class GhosttyRuntime {
         onProgressReport: @escaping (SurfaceProgressReport?) -> Void
     ) {
         let existingSearch = callbacksBySurfaceId[surfaceId]?.onSearchStateChange ?? { _ in }
+        let existingHover = callbacksBySurfaceId[surfaceId]?.onHoverUrlChange ?? { _ in }
         registerSurfaceCallbacks(
             surfaceId: surfaceId,
             onIdleNotification: onIdleNotification,
@@ -118,11 +120,12 @@ final class GhosttyRuntime {
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onProgressReport: onProgressReport,
-            onSearchStateChange: existingSearch
+            onSearchStateChange: existingSearch,
+            onHoverUrlChange: existingHover
         )
     }
 
-    /// Registers all callbacks for a surface model identifier, including progress and search state callbacks.
+    /// Registers all callbacks for a surface model identifier, including progress, search, and hover URL callbacks.
     func registerSurfaceCallbacks(
         surfaceId: UUID,
         onIdleNotification: @escaping () -> Void,
@@ -130,7 +133,8 @@ final class GhosttyRuntime {
         onWorkingDirectoryChange: @escaping (String) -> Void,
         onChildExited: @escaping () -> Void,
         onProgressReport: @escaping (SurfaceProgressReport?) -> Void,
-        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void
+        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void,
+        onHoverUrlChange: @escaping (String?) -> Void
     ) {
         callbacksBySurfaceId[surfaceId] = SurfaceCallbacks(
             onIdleNotification: onIdleNotification,
@@ -138,7 +142,8 @@ final class GhosttyRuntime {
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onProgressReport: onProgressReport,
-            onSearchStateChange: onSearchStateChange
+            onSearchStateChange: onSearchStateChange,
+            onHoverUrlChange: onHoverUrlChange
         )
     }
 
@@ -154,7 +159,8 @@ final class GhosttyRuntime {
         onChildExited: @escaping () -> Void,
         onPaneNavigationRequest: @escaping (PaneNodeModel.PaneFocusDirection) -> Void,
         onProgressReport: @escaping (SurfaceProgressReport?) -> Void,
-        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void
+        onSearchStateChange: @escaping (SurfaceSearchState?) -> Void,
+        onHoverUrlChange: @escaping (String?) -> Void
     ) -> LibghosttySurfaceView {
         registerSurfaceCallbacks(
             surfaceId: surfaceModel.id,
@@ -163,7 +169,8 @@ final class GhosttyRuntime {
             onWorkingDirectoryChange: onWorkingDirectoryChange,
             onChildExited: onChildExited,
             onProgressReport: onProgressReport,
-            onSearchStateChange: onSearchStateChange
+            onSearchStateChange: onSearchStateChange,
+            onHoverUrlChange: onHoverUrlChange
         )
         releasedSurfaceIds.remove(surfaceModel.id)
 
@@ -940,6 +947,32 @@ final class GhosttyRuntime {
             DispatchQueue.main.async {
                 guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
                 runtime.searchStateBySurfaceId[surfaceId]?.selected = rawSelected < 0 ? nil : UInt(rawSelected)
+            }
+            return true
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let shape = action.action.mouse_shape
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey],
+                      let view = runtime.hostViewsBySurfaceId[surfaceId] else { return }
+                view.setCursorShape(shape)
+            }
+            return true
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            let visible = action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE
+            DispatchQueue.main.async { NSCursor.setHiddenUntilMouseMoves(!visible) }
+            return true
+        case GHOSTTY_ACTION_MOUSE_OVER_LINK:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface else { return false }
+            let surfaceKey = UInt(bitPattern: surface)
+            let raw = action.action.mouse_over_link
+            let url: String? = raw.len > 0 ? string(from: raw.url, length: Int(raw.len)) : nil
+            DispatchQueue.main.async {
+                guard let surfaceId = runtime.surfaceIdsByHandle[surfaceKey] else { return }
+                runtime.callbacksBySurfaceId[surfaceId]?.onHoverUrlChange(url)
             }
             return true
         default:

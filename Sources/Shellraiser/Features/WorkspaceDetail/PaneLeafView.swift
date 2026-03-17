@@ -8,6 +8,10 @@ struct PaneLeafView: View {
 
     /// Active in-terminal search state, set by the runtime when a search starts or ends.
     @State private var searchState: SurfaceSearchState?
+    /// URL currently hovered via Cmd+hover link detection, or nil when not hovering a link.
+    @State private var hoverUrl: String?
+    /// Tracks which side the URL tooltip is pinned to; toggled when hovering to avoid obstruction.
+    @State private var isHoveringURLLeft: Bool = false
 
     /// Active surface for the pane.
     private var activeSurface: SurfaceModel? {
@@ -241,6 +245,9 @@ struct PaneLeafView: View {
                         },
                         onSearchStateChange: { state in
                             searchState = state
+                        },
+                        onHoverUrlChange: { url in
+                            hoverUrl = url
                         }
                     )
                     .id(activeSurface.id)
@@ -299,6 +306,48 @@ struct PaneLeafView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.trailing, 20)
                 .padding(.top, 14)
+            }
+
+            if let hoverUrl {
+                let padding: CGFloat = 5
+                let cornerRadius: CGFloat = 9
+                ZStack {
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .leading) {
+                            Spacer()
+                            Text(verbatim: hoverUrl)
+                                .padding(.init(top: padding, leading: padding, bottom: padding, trailing: padding))
+                                .background(
+                                    UnevenRoundedRectangle(cornerRadii: .init(topLeading: cornerRadius))
+                                        .fill(.background)
+                                )
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .opacity(isHoveringURLLeft ? 1 : 0)
+                        }
+                    }
+                    .allowsHitTesting(false)
+
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Spacer()
+                            Text(verbatim: hoverUrl)
+                                .padding(.init(top: padding, leading: padding, bottom: padding, trailing: padding))
+                                .background(
+                                    UnevenRoundedRectangle(cornerRadii: .init(topTrailing: cornerRadius))
+                                        .fill(.background)
+                                )
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .opacity(isHoveringURLLeft ? 0 : 1)
+                                .onHover { hovering in
+                                    isHoveringURLLeft = hovering
+                                }
+                        }
+                        Spacer()
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
