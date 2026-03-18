@@ -45,6 +45,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
     func testPrepareRuntimeSupportWritesHelperWithoutBareCodexCase() throws {
         let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
+        let lockURL = bridge.runtimeDirectory.appendingPathComponent("agent-completions.log.lock")
 
         bridge.prepareRuntimeSupport()
 
@@ -52,7 +53,10 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         XCTAssertTrue(helperContents.contains("codex:completed)"))
         XCTAssertTrue(helperContents.contains("codex:session|claudeCode:session)"))
+        XCTAssertTrue(helperContents.contains("/usr/bin/lockf"))
+        XCTAssertTrue(helperContents.contains("${SHELLRAISER_EVENT_LOG}.lock"))
         XCTAssertFalse(helperContents.contains("\n            codex)\n"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: lockURL.path))
     }
 
     /// Verifies runtime wrappers emit session identity metadata for later resume.
