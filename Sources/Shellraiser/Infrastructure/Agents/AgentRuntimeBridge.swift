@@ -43,6 +43,10 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 fileManager.createFile(atPath: eventLogURL.path, contents: Data())
             }
 
+            if !fileManager.fileExists(atPath: eventLogLockURL.path) {
+                fileManager.createFile(atPath: eventLogLockURL.path, contents: Data())
+            }
+
             try writeExecutable(
                 named: "shellraiser-agent-complete",
                 contents: helperScriptContents
@@ -169,6 +173,11 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         try data.write(to: fileURL, options: .atomic)
     }
 
+    /// Returns the advisory lock file shared by helper writers and the monitor compactor.
+    private var eventLogLockURL: URL {
+        eventLogURL.appendingPathExtension("lock")
+    }
+
     /// Shell helper that appends normalized activity events to the shared event log.
     private var helperScriptContents: String {
         #"""
@@ -215,7 +224,8 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
 
         timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
         encoded="$(printf '%s' "$payload" | /usr/bin/base64 | tr -d '\n')"
-        printf '%s\t%s\t%s\t%s\t%s\n' "$timestamp" "$runtime" "$surface" "$phase" "$encoded" >> "${SHELLRAISER_EVENT_LOG}"
+        lock_file="${SHELLRAISER_EVENT_LOG}.lock"
+        /usr/bin/lockf "$lock_file" /bin/sh -c 'printf "%s\t%s\t%s\t%s\t%s\n" "$2" "$3" "$4" "$5" "$6" >> "$1"' sh "${SHELLRAISER_EVENT_LOG}" "$timestamp" "$runtime" "$surface" "$phase" "$encoded"
         """#
     }
 

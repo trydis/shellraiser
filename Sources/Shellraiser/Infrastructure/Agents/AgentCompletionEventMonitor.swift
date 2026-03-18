@@ -5,16 +5,25 @@ final class AgentCompletionEventMonitor: AgentActivityEventMonitoring {
     var onEvent: ((AgentActivityEvent) -> Void)?
 
     private let logURL: URL
+    private let lockURL: URL
     private let queue = DispatchQueue(label: "com.shellraiser.completion-event-monitor")
-    private let compactionThresholdBytes: UInt64 = 64 * 1024
+    private let compactionThresholdBytes: UInt64
+    private let beforeCompactionAttempt: (() -> Void)?
     private var source: DispatchSourceFileSystemObject?
     private var fileDescriptor: CInt = -1
     private var readOffset: UInt64 = 0
     private var trailingFragment = ""
 
     /// Creates a monitor for the provided event log and starts tailing new events.
-    init(logURL: URL) {
+    init(
+        logURL: URL,
+        compactionThresholdBytes: UInt64 = 64 * 1024,
+        beforeCompactionAttempt: (() -> Void)? = nil
+    ) {
         self.logURL = logURL
+        self.lockURL = logURL.appendingPathExtension("lock")
+        self.compactionThresholdBytes = compactionThresholdBytes
+        self.beforeCompactionAttempt = beforeCompactionAttempt
         start()
     }
 
@@ -129,12 +138,45 @@ final class AgentCompletionEventMonitor: AgentActivityEventMonitoring {
         guard fileSize >= compactionThresholdBytes else { return }
 
         do {
-            try FileHandle(forWritingTo: logURL).truncate(atOffset: 0)
-            readOffset = 0
-            CompletionDebugLogger.log("compacted completion log bytes=\(fileSize)")
+            beforeCompactionAttempt?()
+
+            try withLogLock {
+                let currentFileSize = currentFileSize()
+                guard trailingFragment.isEmpty else { return }
+                guard readOffset == currentFileSize else { return }
+                guard currentFileSize >= compactionThresholdBytes else { return }
+
+                let handle = try FileHandle(forWritingTo: logURL)
+                defer {
+                    try? handle.close()
+                }
+
+                try handle.truncate(atOffset: 0)
+                readOffset = 0
+                CompletionDebugLogger.log("compacted completion log bytes=\(currentFileSize)")
+            }
         } catch {
             CompletionDebugLogger.log("failed to compact completion log: \(error)")
         }
+    }
+
+    /// Serializes log compaction against helper appends using a sidecar advisory lock.
+    private func withLogLock<Result>(_ body: () throws -> Result) throws -> Result {
+        let descriptor = open(lockURL.path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+
+        defer {
+            _ = Darwin.lockf(descriptor, F_ULOCK, 0)
+            Darwin.close(descriptor)
+        }
+
+        guard Darwin.lockf(descriptor, F_LOCK, 0) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+
+        return try body()
     }
 
     /// Returns the current file size for the watched completion log.
