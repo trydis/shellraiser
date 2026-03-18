@@ -11,7 +11,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
     let eventLogURL: URL
 
     private let fileManager: FileManager
-    private var cachedExecutablePaths: [String: String?] = [:]
 
     /// Creates the bridge rooted in the process temp directory to avoid path escaping issues.
     private convenience init() {
@@ -105,51 +104,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             environment["SHELLRAISER_ORIGINAL_PATH"] = inheritedPath
         }
 
-        if let claudePath = resolveExecutable(named: "claude", searchPath: inheritedPath) {
-            environment["SHELLRAISER_REAL_CLAUDE"] = claudePath
-        }
-
-        if let codexPath = resolveExecutable(named: "codex", searchPath: inheritedPath) {
-            environment["SHELLRAISER_REAL_CODEX"] = codexPath
-        }
-
         return environment
-    }
-
-    /// Resolves the current machine path for an executable before wrapper PATH injection takes effect.
-    private func resolveExecutable(named name: String, searchPath: String) -> String? {
-        if let cached = cachedExecutablePaths[name] {
-            return cached
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = [name]
-        process.environment = ["PATH": searchPath]
-
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                cachedExecutablePaths[name] = nil
-                return nil
-            }
-
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
-            let resolved = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = resolved.isEmpty ? nil : resolved
-            cachedExecutablePaths[name] = value
-            return value
-        } catch {
-            cachedExecutablePaths[name] = nil
-            return nil
-        }
     }
 
     /// Writes an executable helper script if contents have changed.
@@ -236,8 +191,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         set -eu
 
         real="${SHELLRAISER_REAL_CLAUDE:-}"
+        lookup_path="${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}"
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
-            real="$(/usr/bin/which claude 2>/dev/null || true)"
+            real="$(PATH="$lookup_path" /usr/bin/which claude 2>/dev/null || true)"
         fi
 
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
@@ -366,8 +322,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         set -eu
 
         real="${SHELLRAISER_REAL_CODEX:-}"
+        lookup_path="${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}"
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
-            real="$(/usr/bin/which codex 2>/dev/null || true)"
+            real="$(PATH="$lookup_path" /usr/bin/which codex 2>/dev/null || true)"
         fi
 
         if [ -z "$real" ] || [ "$real" = "$0" ]; then

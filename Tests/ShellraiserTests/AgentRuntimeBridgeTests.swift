@@ -17,6 +17,38 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         return AgentRuntimeBridge(rootURL: directory)
     }
 
+    /// Verifies environment assembly stays local and does not require synchronous executable lookup.
+    func testEnvironmentInjectsManagedWrapperVariablesWithoutResolvedBinaryPaths() throws {
+        let bridge = try makeBridge()
+        let surfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000000901")!
+
+        let environment = bridge.environment(
+            for: surfaceId,
+            shellPath: "/bin/zsh",
+            baseEnvironment: [
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "TERM": "xterm-256color"
+            ]
+        )
+
+        XCTAssertEqual(
+            environment["PATH"],
+            "\(bridge.binDirectory.path):/usr/local/bin:/usr/bin:/bin"
+        )
+        XCTAssertEqual(environment["TERM"], "xterm-256color")
+        XCTAssertEqual(environment["SHELLRAISER_EVENT_LOG"], bridge.eventLogURL.path)
+        XCTAssertEqual(environment["SHELLRAISER_SURFACE_ID"], surfaceId.uuidString)
+        XCTAssertEqual(
+            environment["SHELLRAISER_HELPER_PATH"],
+            bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete").path
+        )
+        XCTAssertEqual(environment["ZDOTDIR"], bridge.zshShimDirectory.path)
+        XCTAssertEqual(environment["SHELLRAISER_WRAPPER_BIN"], bridge.binDirectory.path)
+        XCTAssertEqual(environment["SHELLRAISER_ORIGINAL_PATH"], "/usr/local/bin:/usr/bin:/bin")
+        XCTAssertNil(environment["SHELLRAISER_REAL_CLAUDE"])
+        XCTAssertNil(environment["SHELLRAISER_REAL_CODEX"])
+    }
+
     /// Verifies the Claude wrapper emits start, stop, permission-request, and selected notification hooks.
     func testPrepareRuntimeSupportWritesClaudeWrapperWithMappedNotificationHooks() throws {
         let bridge = try makeBridge()
@@ -71,10 +103,14 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let codexWrapperContents = try String(contentsOf: codexWrapperURL, encoding: .utf8)
 
         XCTAssertTrue(claudeWrapperContents.contains("hook-session"))
+        XCTAssertTrue(claudeWrapperContents.contains("lookup_path=\"${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}\""))
+        XCTAssertTrue(claudeWrapperContents.contains("PATH=\"$lookup_path\" /usr/bin/which claude"))
         XCTAssertFalse(claudeWrapperContents.contains("SHELLRAISER_PREFERRED_CLAUDE_SESSION_ID"))
         XCTAssertFalse(claudeWrapperContents.contains("--session-id"))
         XCTAssertTrue(claudeWrapperContents.contains("claudeCode \"$surface\" exited"))
         XCTAssertTrue(codexWrapperContents.contains("monitor_codex_session"))
+        XCTAssertTrue(codexWrapperContents.contains("lookup_path=\"${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}\""))
+        XCTAssertTrue(codexWrapperContents.contains("PATH=\"$lookup_path\" /usr/bin/which codex"))
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" session"))
         XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" exited"))
         XCTAssertFalse(codexWrapperContents.contains("codex \"$surface\" started"))
