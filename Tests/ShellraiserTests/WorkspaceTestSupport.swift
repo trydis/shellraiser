@@ -165,6 +165,9 @@ final class InMemoryWorkspacePersistence: WorkspacePersisting {
     func save(_ workspaces: [WorkspaceModel]) {
         storedWorkspaces = workspaces
     }
+
+    /// In-memory persistence completes writes eagerly, so flushing is a no-op.
+    func flush() {}
 }
 
 /// Minimal runtime-bridge test double for workspace-manager orchestration tests.

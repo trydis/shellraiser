@@ -98,7 +98,7 @@ final class WorkspaceManager: ObservableObject {
 
     /// Creates a manager with explicit dependencies for testability.
     init(
-        persistence: any WorkspacePersisting = WorkspacePersistence(),
+        persistence: (any WorkspacePersisting)? = nil,
         workspaceCatalog: WorkspaceCatalogManager = WorkspaceCatalogManager(),
         surfaceManager: WorkspaceSurfaceManager = WorkspaceSurfaceManager(),
         runtimeBridge: (any AgentRuntimeSupporting)? = nil,
@@ -113,8 +113,10 @@ final class WorkspaceManager: ObservableObject {
         let resolvedRuntimeBridge = runtimeBridge ?? AgentRuntimeBridge.shared
         let resolvedActivityEventMonitor = activityEventMonitor
             ?? AgentCompletionEventMonitor(logURL: resolvedRuntimeBridge.eventLogURL)
+        let resolvedPersistence = persistence
+            ?? CoalescingWorkspacePersistence(backing: WorkspacePersistence())
 
-        self.persistence = persistence
+        self.persistence = resolvedPersistence
         self.workspaceCatalog = workspaceCatalog
         self.surfaceManager = surfaceManager
         self.runtimeBridge = resolvedRuntimeBridge

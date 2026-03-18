@@ -55,6 +55,33 @@ final class WorkspacePersistenceTests: WorkspaceTestCase {
         XCTAssertEqual(persistence.load(), [workspace])
     }
 
+    /// Verifies persisted JSON uses a compact encoding without pretty-printed whitespace.
+    func testSaveUsesCompactJSONEncoding() throws {
+        let context = makePersistenceContext()
+        let workspace = makeWorkspace(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001041")!,
+            name: "Compact",
+            rootPane: makeLeaf(
+                paneId: UUID(uuidString: "00000000-0000-0000-0000-000000001042")!,
+                surfaces: [
+                    makeSurface(
+                        id: UUID(uuidString: "00000000-0000-0000-0000-000000001043")!,
+                        title: "Compact Surface"
+                    )
+                ]
+            )
+        )
+
+        context.persistence.save([workspace])
+
+        let workspaceFile = context.directory.appendingPathComponent("workspaces.json")
+        let encodedJSON = try XCTUnwrap(String(data: Data(contentsOf: workspaceFile), encoding: .utf8))
+
+        XCTAssertFalse(encodedJSON.contains("\n"))
+        XCTAssertFalse(encodedJSON.contains("  "))
+        XCTAssertTrue(encodedJSON.hasPrefix("[{"))
+    }
+
     /// Verifies corrupt persistence payloads fail closed by returning nil.
     func testLoadReturnsNilForCorruptPersistenceFile() throws {
         let context = makePersistenceContext()

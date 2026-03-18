@@ -141,6 +141,7 @@ extension WorkspaceManager {
     /// Persists the current workspace collection.
     func save() {
         persistence.save(workspaces)
+        persistence.flush()
     }
 
     /// Freezes resume invalidation so active agent sessions remain resumable across app shutdown.
