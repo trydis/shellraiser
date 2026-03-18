@@ -7,6 +7,9 @@ protocol WorkspacePersisting {
 
     /// Persists workspaces to storage.
     func save(_ workspaces: [WorkspaceModel])
+
+    /// Forces any pending persistence work to complete immediately.
+    func flush()
 }
 
 /// Filesystem-backed persistence for workspace layout state.
@@ -144,7 +147,6 @@ final class WorkspacePersistence: WorkspacePersisting {
             )
 
             let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(workspaces)
 
@@ -154,5 +156,66 @@ final class WorkspacePersistence: WorkspacePersisting {
                 print("Failed to save workspaces: \(error)")
             }
         }
+    }
+
+    /// Filesystem-backed writes are synchronous, so flushing is a no-op.
+    func flush() {}
+}
+
+/// Debounces repeated workspace saves and persists only the latest snapshot.
+final class CoalescingWorkspacePersistence: WorkspacePersisting {
+    private let backing: any WorkspacePersisting
+    private let debounceInterval: TimeInterval
+    private let coordinationQueue = DispatchQueue(label: "com.shellraiser.workspace-persistence")
+    private var pendingWorkspaces: [WorkspaceModel]?
+    private var saveWorkItem: DispatchWorkItem?
+
+    /// Creates a coalescing wrapper around another persistence implementation.
+    init(backing: any WorkspacePersisting, debounceInterval: TimeInterval = 0.5) {
+        self.backing = backing
+        self.debounceInterval = max(0, debounceInterval)
+    }
+
+    /// Returns the latest in-memory snapshot when a debounced save is pending.
+    func load() -> [WorkspaceModel]? {
+        coordinationQueue.sync {
+            pendingWorkspaces ?? backing.load()
+        }
+    }
+
+    /// Stores the latest snapshot and resets the debounce timer.
+    func save(_ workspaces: [WorkspaceModel]) {
+        coordinationQueue.sync {
+            pendingWorkspaces = workspaces
+            saveWorkItem?.cancel()
+
+            guard debounceInterval > 0 else {
+                persistPendingWorkspaces()
+                return
+            }
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.persistPendingWorkspaces()
+            }
+            saveWorkItem = workItem
+            coordinationQueue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        }
+    }
+
+    /// Cancels any scheduled save and writes the latest snapshot immediately.
+    func flush() {
+        coordinationQueue.sync {
+            saveWorkItem?.cancel()
+            persistPendingWorkspaces()
+        }
+    }
+
+    /// Writes and clears the currently pending snapshot, if any.
+    private func persistPendingWorkspaces() {
+        guard let pendingWorkspaces else { return }
+        self.pendingWorkspaces = nil
+        saveWorkItem = nil
+        backing.save(pendingWorkspaces)
+        backing.flush()
     }
 }

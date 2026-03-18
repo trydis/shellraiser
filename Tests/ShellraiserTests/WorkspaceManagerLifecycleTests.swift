@@ -133,4 +133,19 @@ final class WorkspaceManagerLifecycleTests: WorkspaceTestCase {
         XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, surface.id)
         XCTAssertEqual(manager.workspaces[0].rootPane.firstActiveSurfaceId(), surface.id)
     }
+
+    /// Verifies shutdown flushes pending debounced persistence before app teardown continues.
+    func testPrepareForTerminationFlushesPendingDebouncedPersistence() {
+        let backing = RecordingWorkspacePersistence()
+        let persistence = CoalescingWorkspacePersistence(backing: backing, debounceInterval: 60)
+        let manager = makeWorkspaceManager(persistence: persistence)
+        let workspace = WorkspaceModel.makeDefault(name: "Shutdown")
+        manager.workspaces = [workspace]
+
+        manager.prepareForTermination()
+
+        XCTAssertTrue(manager.isTerminating)
+        XCTAssertEqual(backing.savedSnapshots, [[workspace]])
+        XCTAssertEqual(backing.flushCallCount, 1)
+    }
 }
