@@ -711,13 +711,15 @@ final class GhosttyRuntime {
         }
     }
 
-    /// Reads text from the host pasteboard and completes a pending Ghostty request.
+    /// Accepts a Ghostty clipboard-read request and completes it on the main actor.
+    ///
+    /// Returns `false` only when the runtime cannot take ownership of the request at all.
     nonisolated private static func readClipboard(
         userdata: UnsafeMutableRawPointer?,
         clipboard: ghostty_clipboard_e,
         requestState: UnsafeMutableRawPointer?
-    ) {
-        guard let hostView = hostView(from: userdata) else { return }
+    ) -> Bool {
+        guard let hostView = hostView(from: userdata) else { return false }
 
         Task { @MainActor in
             guard let surface = hostView.surfaceHandleForCallbacks else { return }
@@ -731,6 +733,8 @@ final class GhosttyRuntime {
             let text = pasteboard.opinionatedStringContents ?? ""
             completeClipboardRequest(surface: surface, text: text, requestState: requestState)
         }
+
+        return true
     }
 
     /// Handles clipboard-read confirmation requests conservatively by denying them.
