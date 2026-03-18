@@ -181,8 +181,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         set -eu
 
         real="${SHELLRAISER_REAL_CLAUDE:-}"
+        lookup_path="${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}"
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
-            real="$(/usr/bin/which claude 2>/dev/null || true)"
+            real="$(PATH="$lookup_path" /usr/bin/which claude 2>/dev/null || true)"
         fi
 
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
@@ -311,8 +312,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         set -eu
 
         real="${SHELLRAISER_REAL_CODEX:-}"
+        lookup_path="${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}"
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
-            real="$(/usr/bin/which codex 2>/dev/null || true)"
+            real="$(PATH="$lookup_path" /usr/bin/which codex 2>/dev/null || true)"
         fi
 
         if [ -z "$real" ] || [ "$real" = "$0" ]; then
