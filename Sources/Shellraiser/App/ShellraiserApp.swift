@@ -203,6 +203,20 @@ struct WorkspaceCommands: Commands {
 
             Divider()
 
+            Button("Previous Workspace") {
+                manager.selectPreviousWorkspace()
+            }
+            .keyboardShortcut(.upArrow, modifiers: [.command])
+            .disabled(manager.workspaces.count <= 1)
+
+            Button("Next Workspace") {
+                manager.selectNextWorkspace()
+            }
+            .keyboardShortcut(.downArrow, modifiers: [.command])
+            .disabled(manager.workspaces.count <= 1)
+
+            Divider()
+
             Button("Jump to Next Completed Session") {
                 manager.jumpToNextCompletedSession()
             }
