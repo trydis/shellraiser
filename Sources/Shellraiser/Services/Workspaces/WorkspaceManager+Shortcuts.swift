@@ -59,11 +59,9 @@ extension WorkspaceManager {
         if hasCommand, !hasOption, !hasControl, !hasShift {
             switch event.keyCode {
             case 126:
-                selectPreviousWorkspace()
-                return true
+                return selectPreviousWorkspace()
             case 125:
-                selectNextWorkspace()
-                return true
+                return selectNextWorkspace()
             default:
                 break
             }
