@@ -162,6 +162,30 @@ extension WorkspaceManager {
         index > 0 && index <= workspaces.count
     }
 
+    /// Selects the workspace before the current one, wrapping to the last.
+    /// Returns true if a switch occurred.
+    @discardableResult
+    func selectPreviousWorkspace() -> Bool {
+        guard workspaces.count > 1,
+              let currentId = window.selectedWorkspaceId,
+              let currentIndex = workspaces.firstIndex(where: { $0.id == currentId }) else { return false }
+        let previousIndex = (currentIndex - 1 + workspaces.count) % workspaces.count
+        selectWorkspace(workspaces[previousIndex].id)
+        return true
+    }
+
+    /// Selects the workspace after the current one, wrapping to the first.
+    /// Returns true if a switch occurred.
+    @discardableResult
+    func selectNextWorkspace() -> Bool {
+        guard workspaces.count > 1,
+              let currentId = window.selectedWorkspaceId,
+              let currentIndex = workspaces.firstIndex(where: { $0.id == currentId }) else { return false }
+        let nextIndex = (currentIndex + 1) % workspaces.count
+        selectWorkspace(workspaces[nextIndex].id)
+        return true
+    }
+
     /// Restores first-responder focus to the selected workspace's active terminal surface.
     func restoreSelectedWorkspaceTerminalFocus() {
         guard let workspaceId = window.selectedWorkspaceId,

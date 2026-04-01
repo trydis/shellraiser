@@ -56,6 +56,17 @@ extension WorkspaceManager {
             }
         }
 
+        if hasCommand, !hasOption, !hasControl, !hasShift {
+            switch event.keyCode {
+            case 126:
+                return selectPreviousWorkspace()
+            case 125:
+                return selectNextWorkspace()
+            default:
+                break
+            }
+        }
+
         guard hasCommand, !hasOption, !hasControl else { return false }
 
         guard let key = event.charactersIgnoringModifiers?.lowercased(), !key.isEmpty else {
