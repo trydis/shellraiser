@@ -22,6 +22,8 @@
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Shellraiser needs automation access to manage terminal processes.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Shellraiser needs microphone access to enable voice input.</string>
     <key>NSAppleScriptEnabled</key>
     <true/>
     <key>OSAScriptingDefinition</key>
