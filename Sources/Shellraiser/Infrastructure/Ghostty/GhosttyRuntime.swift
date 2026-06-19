@@ -343,6 +343,15 @@ final class GhosttyRuntime {
         ghostty_surface_set_focus(surface, focused)
     }
 
+    /// Notifies libghostty whether a surface is occluded (not visible).
+    ///
+    /// `ghostty_surface_set_occlusion` takes `true` when the surface IS visible,
+    /// so we invert the `occluded` flag.
+    func setSurfaceOcclusion(surfaceId: UUID, occluded: Bool) {
+        guard let surface = surfaceHandlesById[surfaceId] else { return }
+        ghostty_surface_set_occlusion(surface, !occluded)
+    }
+
     /// Moves first-responder focus to the host view that owns a surface id.
     func focusSurfaceHost(surfaceId: UUID) {
         pendingFocusedSurfaceId = surfaceId

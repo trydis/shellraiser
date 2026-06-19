@@ -23,6 +23,11 @@ final class WorkspacePersistence: WorkspacePersisting {
     private let fileManager = FileManager.default
     private let logsErrors: Bool
     private let workspaceFileURL: URL
+    private let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
 
     /// Returns the directory containing the persisted workspace file.
     var directoryURL: URL {
@@ -146,10 +151,7 @@ final class WorkspacePersistence: WorkspacePersisting {
                 withIntermediateDirectories: true
             )
 
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(workspaces)
-
             try data.write(to: workspaceFileURL, options: .atomic)
         } catch {
             if logsErrors {
@@ -185,20 +187,20 @@ final class CoalescingWorkspacePersistence: WorkspacePersisting {
 
     /// Stores the latest snapshot and resets the debounce timer.
     func save(_ workspaces: [WorkspaceModel]) {
-        coordinationQueue.sync {
-            pendingWorkspaces = workspaces
-            saveWorkItem?.cancel()
+        coordinationQueue.async {
+            self.pendingWorkspaces = workspaces
+            self.saveWorkItem?.cancel()
 
-            guard debounceInterval > 0 else {
-                persistPendingWorkspaces()
+            guard self.debounceInterval > 0 else {
+                self.persistPendingWorkspaces()
                 return
             }
 
             let workItem = DispatchWorkItem { [weak self] in
                 self?.persistPendingWorkspaces()
             }
-            saveWorkItem = workItem
-            coordinationQueue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+            self.saveWorkItem = workItem
+            self.coordinationQueue.asyncAfter(deadline: .now() + self.debounceInterval, execute: workItem)
         }
     }
 

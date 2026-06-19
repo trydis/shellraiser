@@ -203,6 +203,7 @@ struct PaneLeafView: View {
                         surface: activeSurface,
                         config: activeSurface.terminalConfig,
                         isFocused: isFocusedPane,
+                        isWorkspaceSelected: manager.window.selectedWorkspaceId == workspaceId,
                         onActivate: {
                             manager.activateSurface(workspaceId: workspaceId, paneId: leaf.id, surfaceId: activeSurface.id)
                         },
