@@ -27,6 +27,8 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
 protocol GhosttyTerminalRuntimeControlling: AnyObject {
     func attachHost(surfaceId: UUID)
     func detachHost(surfaceId: UUID)
+    /// Returns the number of SwiftUI wrapper containers that currently have this surface mounted.
+    func mountedHostCount(surfaceId: UUID) -> Int
     func setSurfaceFocus(surfaceId: UUID, focused: Bool)
     func setSurfaceOcclusion(surfaceId: UUID, occluded: Bool)
     func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: any GhosttyFocusableHost)
@@ -198,7 +200,11 @@ struct GhosttyTerminalView: NSViewRepresentable {
         if container.mountedSurfaceId != surface.id {
             if let mountedSurfaceId = container.mountedSurfaceId {
                 runtime.detachHost(surfaceId: mountedSurfaceId)
-                runtime.setSurfaceOcclusion(surfaceId: mountedSurfaceId, occluded: true)
+                // Only occlude when this was the last remaining mount for the surface.
+                // In reparent scenarios another container may still show it visibly.
+                if runtime.mountedHostCount(surfaceId: mountedSurfaceId) == 0 {
+                    runtime.setSurfaceOcclusion(surfaceId: mountedSurfaceId, occluded: true)
+                }
             }
             runtime.attachHost(surfaceId: surface.id)
         }
@@ -230,8 +236,12 @@ struct GhosttyTerminalView: NSViewRepresentable {
         runtime: any GhosttyTerminalRuntimeControlling
     ) {
         guard let surfaceId = container.mountedSurfaceId else { return }
-        runtime.setSurfaceOcclusion(surfaceId: surfaceId, occluded: true)
         runtime.detachHost(surfaceId: surfaceId)
+        // Only occlude when this was the last remaining mount for the surface.
+        // In reparent scenarios another container may still show it visibly.
+        if runtime.mountedHostCount(surfaceId: surfaceId) == 0 {
+            runtime.setSurfaceOcclusion(surfaceId: surfaceId, occluded: true)
+        }
         container.clearMountedSurface()
     }
 

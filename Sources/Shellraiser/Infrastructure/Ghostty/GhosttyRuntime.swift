@@ -200,6 +200,11 @@ final class GhosttyRuntime {
         mountedHostCountsBySurfaceId[surfaceId, default: 0] += 1
     }
 
+    /// Returns the current number of SwiftUI wrapper containers that have this surface mounted.
+    func mountedHostCount(surfaceId: UUID) -> Int {
+        mountedHostCountsBySurfaceId[surfaceId, default: 0]
+    }
+
     /// Marks a host view as detached and schedules delayed cleanup.
     func detachHost(surfaceId: UUID) {
         let current = mountedHostCountsBySurfaceId[surfaceId, default: 0]

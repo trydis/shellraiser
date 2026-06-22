@@ -43,6 +43,9 @@ extension WorkspaceManager {
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                // Re-check after the actor hop: a replacement task may have cancelled
+                // this one between the pre-hop check and the write below.
+                guard !Task.isCancelled else { return }
                 guard let workspace = workspace(id: workspaceId),
                       let surface = surface(in: workspace.rootPane, surfaceId: surfaceId),
                       surface.terminalConfig.workingDirectory == requestedWorkingDirectory else {
