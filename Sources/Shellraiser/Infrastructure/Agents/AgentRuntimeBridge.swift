@@ -437,8 +437,10 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 [ "$latest_timestamp" = "$candidate_timestamp" ]
             }
 
-            while :; do
+            iteration=0
+            while [ "$iteration" -lt 300 ]; do
                 [ -f "$stamp_file" ] || exit 0
+                iteration=$((iteration + 1))
 
                 while IFS= read -r session_file; do
                     [ -f "$session_file" ] || continue

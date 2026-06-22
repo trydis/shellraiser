@@ -27,7 +27,10 @@ protocol GhosttyTerminalHostView: GhosttyFocusableHost {
 protocol GhosttyTerminalRuntimeControlling: AnyObject {
     func attachHost(surfaceId: UUID)
     func detachHost(surfaceId: UUID)
+    /// Returns the number of SwiftUI wrapper containers that currently have this surface mounted.
+    func mountedHostCount(surfaceId: UUID) -> Int
     func setSurfaceFocus(surfaceId: UUID, focused: Bool)
+    func setSurfaceOcclusion(surfaceId: UUID, occluded: Bool)
     func restorePendingFocusIfNeeded(surfaceId: UUID, hostView: any GhosttyFocusableHost)
 }
 
@@ -73,6 +76,9 @@ struct GhosttyTerminalView: NSViewRepresentable {
     let surface: SurfaceModel
     let config: TerminalPanelConfig
     let isFocused: Bool
+    /// Whether this surface's workspace is the currently selected one.
+    /// Non-selected workspaces are occluded so libghostty stops their render loops.
+    let isWorkspaceSelected: Bool
     let onActivate: () -> Void
     let onIdleNotification: () -> Void
     let onInput: (SurfaceInputEvent) -> Void
@@ -109,6 +115,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             surface: surface,
             config: config,
             isFocused: isFocused,
+            isWorkspaceSelected: isWorkspaceSelected,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
             onInput: onInput,
@@ -151,6 +158,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
             surface: surface,
             config: config,
             isFocused: isFocused,
+            isWorkspaceSelected: isWorkspaceSelected,
             onActivate: onActivate,
             onIdleNotification: onIdleNotification,
             onInput: onInput,
@@ -179,6 +187,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         surface: SurfaceModel,
         config: TerminalPanelConfig,
         isFocused: Bool,
+        isWorkspaceSelected: Bool,
         onActivate: @escaping () -> Void,
         onIdleNotification: @escaping () -> Void,
         onInput: @escaping (SurfaceInputEvent) -> Void,
@@ -191,11 +200,19 @@ struct GhosttyTerminalView: NSViewRepresentable {
         if container.mountedSurfaceId != surface.id {
             if let mountedSurfaceId = container.mountedSurfaceId {
                 runtime.detachHost(surfaceId: mountedSurfaceId)
+                // Only occlude when this was the last remaining mount for the surface.
+                // In reparent scenarios another container may still show it visibly.
+                if runtime.mountedHostCount(surfaceId: mountedSurfaceId) == 0 {
+                    runtime.setSurfaceOcclusion(surfaceId: mountedSurfaceId, occluded: true)
+                }
             }
             runtime.attachHost(surfaceId: surface.id)
         }
 
         container.mountHostView(host, surfaceId: surface.id)
+        // Apply occlusion on every sync so workspace-selection changes take effect
+        // even when the mounted surface has not changed.
+        runtime.setSurfaceOcclusion(surfaceId: surface.id, occluded: !isWorkspaceSelected)
         syncHostView(
             host,
             runtime: runtime,
@@ -220,6 +237,11 @@ struct GhosttyTerminalView: NSViewRepresentable {
     ) {
         guard let surfaceId = container.mountedSurfaceId else { return }
         runtime.detachHost(surfaceId: surfaceId)
+        // Only occlude when this was the last remaining mount for the surface.
+        // In reparent scenarios another container may still show it visibly.
+        if runtime.mountedHostCount(surfaceId: surfaceId) == 0 {
+            runtime.setSurfaceOcclusion(surfaceId: surfaceId, occluded: true)
+        }
         container.clearMountedSurface()
     }
 

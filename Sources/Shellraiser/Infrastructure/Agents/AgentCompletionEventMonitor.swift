@@ -114,13 +114,19 @@ final class AgentCompletionEventMonitor: AgentActivityEventMonitoring {
             ? lines.map(String.init)
             : lines.dropLast().map(String.init)
 
-        for line in completeLines where !line.isEmpty {
-            guard let event = AgentActivityEvent.parse(line) else { continue }
-            CompletionDebugLogger.log(
-                "event runtime=\(event.agentType.rawValue) phase=\(event.phase.rawValue) surface=\(event.surfaceId.uuidString)"
-            )
-            Task { @MainActor in
-                self.onEvent?(event)
+        let events = completeLines.compactMap { line -> AgentActivityEvent? in
+            guard !line.isEmpty else { return nil }
+            return AgentActivityEvent.parse(line)
+        }
+        if !events.isEmpty {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                for event in events {
+                    CompletionDebugLogger.log(
+                        "event runtime=\(event.agentType.rawValue) phase=\(event.phase.rawValue) surface=\(event.surfaceId.uuidString)"
+                    )
+                    onEvent?(event)
+                }
             }
         }
 

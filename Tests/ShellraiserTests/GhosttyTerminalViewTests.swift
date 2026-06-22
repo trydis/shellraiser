@@ -93,6 +93,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             surface: surface,
             config: config,
             isFocused: true,
+            isWorkspaceSelected: true,
             onActivate: {},
             onIdleNotification: {},
             onInput: { _ in },
@@ -109,6 +110,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             surface: surface,
             config: config,
             isFocused: true,
+            isWorkspaceSelected: true,
             onActivate: {},
             onIdleNotification: {},
             onInput: { _ in },
@@ -126,6 +128,11 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertEqual(secondContainer.mountedSurfaceId, surface.id)
         XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id, surface.id])
         XCTAssertEqual(runtime.detachHostSurfaceIds, [])
+        XCTAssertEqual(
+            runtime.setSurfaceOcclusionCalls.map(\.occluded),
+            [false, false],
+            "selected workspace surfaces must be un-occluded on each sync"
+        )
     }
 
     /// Verifies a wrapper swaps in the current cached host when the surface stays the same.
@@ -148,6 +155,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             surface: surface,
             config: config,
             isFocused: false,
+            isWorkspaceSelected: true,
             onActivate: {},
             onIdleNotification: {},
             onInput: { _ in },
@@ -164,6 +172,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             surface: surface,
             config: config,
             isFocused: true,
+            isWorkspaceSelected: true,
             onActivate: {},
             onIdleNotification: {},
             onInput: { _ in },
@@ -201,6 +210,7 @@ final class GhosttyTerminalViewTests: XCTestCase {
             surface: surface,
             config: config,
             isFocused: false,
+            isWorkspaceSelected: false,
             onActivate: {},
             onIdleNotification: {},
             onInput: { _ in },
@@ -215,6 +225,109 @@ final class GhosttyTerminalViewTests: XCTestCase {
         XCTAssertNil(container.mountedSurfaceId)
         XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id])
         XCTAssertEqual(runtime.detachHostSurfaceIds, [surface.id])
+        XCTAssertEqual(
+            runtime.setSurfaceOcclusionCalls.map(\.occluded),
+            [true, true],
+            "non-selected workspace surface must be occluded on sync and again on dismantle"
+        )
+    }
+
+    /// Verifies that dismantling one of two active mounts for the same surface does NOT occlude it,
+    /// because the second mount still shows the surface visibly.
+    func testDismantleContainerViewDoesNotOccludeSurfaceWhenAnotherMountRemains() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let firstContainer = GhosttyTerminalContainerView(frame: .zero)
+        let secondContainer = GhosttyTerminalContainerView(frame: .zero)
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        let sync: (GhosttyTerminalContainerView) -> Void = { container in
+            GhosttyTerminalView.syncContainerView(
+                container,
+                host: host,
+                runtime: runtime,
+                surface: surface,
+                config: config,
+                isFocused: false,
+                isWorkspaceSelected: true,
+                onActivate: {},
+                onIdleNotification: {},
+                onInput: { _ in },
+                onTitleChange: { _ in },
+                onWorkingDirectoryChange: { _ in },
+                onChildExited: {},
+                onPaneNavigationRequest: { _ in },
+                onProgressReport: { _ in }
+            )
+        }
+
+        // Mount surface in two containers (simulates reparent in progress).
+        sync(firstContainer)
+        sync(secondContainer)
+
+        // Both attaches recorded; no detaches yet.
+        XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id, surface.id])
+        XCTAssertEqual(runtime.detachHostSurfaceIds, [])
+
+        // Dismantle one mount — second mount still active.
+        GhosttyTerminalView.dismantleContainerView(firstContainer, runtime: runtime)
+
+        XCTAssertNil(firstContainer.mountedSurfaceId)
+        XCTAssertEqual(runtime.detachHostSurfaceIds, [surface.id])
+        XCTAssertFalse(
+            runtime.setSurfaceOcclusionCalls.contains(where: { $0.surfaceId == surface.id && $0.occluded }),
+            "surface must NOT be occluded while a second mount still shows it"
+        )
+    }
+
+    /// Verifies occlusion is re-applied reactively when workspace selection changes
+    /// without the mounted surface changing.
+    func testSyncContainerViewReappliesOcclusionOnWorkspaceSelectionChange() {
+        let runtime = MockGhosttyTerminalRuntime()
+        let container = GhosttyTerminalContainerView(frame: .zero)
+        let host = MockGhosttyTerminalHostView()
+        let surface = SurfaceModel.makeDefault()
+        let config = TerminalPanelConfig(
+            workingDirectory: "/tmp",
+            shell: "/bin/zsh",
+            environment: [:]
+        )
+
+        let sync: (Bool) -> Void = { isSelected in
+            GhosttyTerminalView.syncContainerView(
+                container,
+                host: host,
+                runtime: runtime,
+                surface: surface,
+                config: config,
+                isFocused: false,
+                isWorkspaceSelected: isSelected,
+                onActivate: {},
+                onIdleNotification: {},
+                onInput: { _ in },
+                onTitleChange: { _ in },
+                onWorkingDirectoryChange: { _ in },
+                onChildExited: {},
+                onPaneNavigationRequest: { _ in },
+                onProgressReport: { _ in }
+            )
+        }
+
+        sync(true)   // workspace selected → visible
+        sync(false)  // workspace deselected → occlude
+        sync(true)   // workspace reselected → visible again
+
+        XCTAssertEqual(runtime.attachHostSurfaceIds, [surface.id], "attach fires only on first mount")
+        XCTAssertEqual(
+            runtime.setSurfaceOcclusionCalls.map(\.occluded),
+            [false, true, false],
+            "occlusion must track workspace selection on every sync"
+        )
     }
 }
 
@@ -266,6 +379,7 @@ private final class MockGhosttyTerminalRuntime: GhosttyTerminalRuntimeControllin
     private(set) var attachHostSurfaceIds: [UUID] = []
     private(set) var detachHostSurfaceIds: [UUID] = []
     private(set) var setSurfaceFocusCalls: [(surfaceId: UUID, focused: Bool)] = []
+    private(set) var setSurfaceOcclusionCalls: [(surfaceId: UUID, occluded: Bool)] = []
     private(set) var restorePendingFocusSurfaceIds: [UUID] = []
     private(set) var restoredHosts: [AnyObject] = []
 
@@ -279,9 +393,21 @@ private final class MockGhosttyTerminalRuntime: GhosttyTerminalRuntimeControllin
         detachHostSurfaceIds.append(surfaceId)
     }
 
+    /// Returns the simulated remaining mount count for a surface (attaches minus detaches).
+    func mountedHostCount(surfaceId: UUID) -> Int {
+        let attached = attachHostSurfaceIds.filter { $0 == surfaceId }.count
+        let detached = detachHostSurfaceIds.filter { $0 == surfaceId }.count
+        return max(0, attached - detached)
+    }
+
     /// Records direct focus-state updates for a surface.
     func setSurfaceFocus(surfaceId: UUID, focused: Bool) {
         setSurfaceFocusCalls.append((surfaceId: surfaceId, focused: focused))
+    }
+
+    /// Records occlusion state changes for a surface.
+    func setSurfaceOcclusion(surfaceId: UUID, occluded: Bool) {
+        setSurfaceOcclusionCalls.append((surfaceId: surfaceId, occluded: occluded))
     }
 
     /// Records pending-focus restore attempts for a host view.

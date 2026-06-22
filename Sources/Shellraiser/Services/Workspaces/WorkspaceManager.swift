@@ -79,6 +79,7 @@ final class WorkspaceManager: ObservableObject {
     var progressClearTimers: [UUID: Timer] = [:]
     /// Monotonically-increasing generation counter per surface; used to detect stale timer callbacks.
     var progressTimerGeneration: [UUID: Int] = [:]
+    var gitBranchTasks: [UUID: Task<Void, Never>] = [:]
 
     let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager

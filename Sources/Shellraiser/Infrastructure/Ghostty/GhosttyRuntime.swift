@@ -200,6 +200,11 @@ final class GhosttyRuntime {
         mountedHostCountsBySurfaceId[surfaceId, default: 0] += 1
     }
 
+    /// Returns the current number of SwiftUI wrapper containers that have this surface mounted.
+    func mountedHostCount(surfaceId: UUID) -> Int {
+        mountedHostCountsBySurfaceId[surfaceId, default: 0]
+    }
+
     /// Marks a host view as detached and schedules delayed cleanup.
     func detachHost(surfaceId: UUID) {
         let current = mountedHostCountsBySurfaceId[surfaceId, default: 0]
@@ -341,6 +346,15 @@ final class GhosttyRuntime {
     func setSurfaceFocus(surfaceId: UUID, focused: Bool) {
         guard let surface = surfaceHandlesById[surfaceId] else { return }
         ghostty_surface_set_focus(surface, focused)
+    }
+
+    /// Notifies libghostty whether a surface is occluded (not visible).
+    ///
+    /// `ghostty_surface_set_occlusion` takes `true` when the surface IS visible,
+    /// so we invert the `occluded` flag.
+    func setSurfaceOcclusion(surfaceId: UUID, occluded: Bool) {
+        guard let surface = surfaceHandlesById[surfaceId] else { return }
+        ghostty_surface_set_occlusion(surface, !occluded)
     }
 
     /// Moves first-responder focus to the host view that owns a surface id.

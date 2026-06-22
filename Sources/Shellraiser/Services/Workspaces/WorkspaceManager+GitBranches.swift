@@ -29,27 +29,41 @@ extension WorkspaceManager {
     }
 
     /// Refreshes the resolved Git state for a surface working directory.
+    ///
+    /// Cancels any in-flight task for the same surface before spawning a replacement.
     @discardableResult
     func refreshGitBranch(workspaceId: UUID, surfaceId: UUID, workingDirectory: String) -> Task<Void, Never> {
+        gitBranchTasks[surfaceId]?.cancel()
+
         let requestedWorkingDirectory = workingDirectory
         let gitStateResolver = self.gitStateResolver
 
-        return Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) { [weak self] in
             let gitState = gitStateResolver(requestedWorkingDirectory)
-            await MainActor.run {
-                guard let workspace = self.workspace(id: workspaceId),
-                      let surface = self.surface(in: workspace.rootPane, surfaceId: surfaceId),
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                // Re-check after the actor hop: a replacement task may have cancelled
+                // this one between the pre-hop check and the write below.
+                guard !Task.isCancelled else { return }
+                guard let workspace = workspace(id: workspaceId),
+                      let surface = surface(in: workspace.rootPane, surfaceId: surfaceId),
                       surface.terminalConfig.workingDirectory == requestedWorkingDirectory else {
                     return
                 }
 
-                self.gitStatesBySurfaceId[surfaceId] = gitState
+                gitStatesBySurfaceId[surfaceId] = gitState
             }
         }
+
+        gitBranchTasks[surfaceId] = task
+        return task
     }
 
     /// Removes cached Git state for a surface that is no longer present.
     func clearGitBranch(surfaceId: UUID) {
+        gitBranchTasks[surfaceId]?.cancel()
+        gitBranchTasks.removeValue(forKey: surfaceId)
         gitStatesBySurfaceId.removeValue(forKey: surfaceId)
     }
 
