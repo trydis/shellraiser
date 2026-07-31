@@ -50,12 +50,6 @@ Run the app locally:
 make run
 ```
 
-## Copilot CLI
-
-Shellraiser supports interactive [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli) sessions and resumes them with their saved session ID after an app restart. Install and authenticate the `copilot` command before starting a session.
-
-While a Copilot session is active, Shellraiser creates its own temporary user hook file to receive lifecycle events for activity and completion tracking. It leaves existing Copilot user, repository, policy, and plugin hooks unchanged. If Shellraiser stops unexpectedly, the hook remains while the Copilot process is alive; stale Shellraiser hook state is removed the next time Shellraiser or a managed Copilot session starts.
-
 ## Automation
 
 Shellraiser exposes AppleScript objects and commands for workspaces, terminals, and surface configurations.
