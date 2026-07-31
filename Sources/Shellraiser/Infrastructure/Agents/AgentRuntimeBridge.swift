@@ -148,6 +148,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         fi
 
         payload=""
+        session_id=""
         case "$phase" in
             started|completed|session|exited|hook-session)
                 ;;
@@ -157,13 +158,11 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         esac
 
         case "$runtime:$phase" in
-            codex:completed)
-                payload="${4:-}"
-                ;;
             codex:session|claudeCode:session)
                 payload="${4:-}"
+                session_id="$payload"
                 ;;
-            claudeCode:hook-session)
+            claudeCode:hook-session|codex:hook-session)
                 hook_payload="$(cat)"
                 compact_payload="$(printf '%s' "$hook_payload" | tr -d '\n')"
                 session_id="$(printf '%s' "$compact_payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr '[:upper:]' '[:lower:]' | sed -n '1p')"
@@ -173,7 +172,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 ;;
         esac
 
-        if [ "$phase" = "session" ] && [ -z "$payload" ]; then
+        if [ "$phase" = "session" ] && [ -z "$session_id" ]; then
             exit 0
         fi
 
@@ -315,7 +314,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         """#
     }
 
-    /// Codex wrapper that injects the official `notify` callback for the current surface.
+    /// Codex wrapper that injects native activity hooks for the current surface.
     private var codexWrapperContents: String {
         #"""
         #!/bin/sh
@@ -342,163 +341,20 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
 
-        parse_codex_session_id() {
-            case "${1:-}" in
-                resume|fork)
-                    shift
-                    while [ "$#" -gt 0 ]; do
-                        case "$1" in
-                            --*)
-                                shift
-                                ;;
-                            *)
-                                printf '%s\n' "$1"
-                                return 0
-                                ;;
-                        esac
-                    done
-                    ;;
-            esac
-
-            return 1
-        }
-
-        codex_is_interactive_start() {
-            case "${1:-}" in
-                ""|-*|resume|fork)
-                    return 0
-                    ;;
-                exec|review|login|logout|mcp|mcp-server|app-server|app|completion|sandbox|debug|apply|cloud|features|help)
-                    return 1
-                    ;;
-                *)
-                    return 0
-                    ;;
-            esac
-        }
-
-        monitor_codex_session() {
-            root="${HOME}/.codex/sessions"
-            cwd="$(pwd)"
-            stamp_file="$1"
-            start_timestamp="$2"
-            helper_path="$3"
-            surface_id="$4"
-
-            [ -d "$root" ] || exit 0
-
-            extract_codex_session_timestamp() {
-                session_line="$1"
-                payload_timestamp="$(
-                    printf '%s\n' "$session_line" \
-                        | sed -n 's/.*"timestamp":"[^"]*".*"timestamp":"\([^"]*\)".*/\1/p' \
-                        | head -n 1
-                )"
-                if [ -n "$payload_timestamp" ]; then
-                    printf '%s\n' "$payload_timestamp"
-                    return 0
-                fi
-
-                printf '%s\n' "$session_line" \
-                    | sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p' \
-                    | head -n 1
-            }
-
-            normalize_codex_session_timestamp() {
-                timestamp="${1:-}"
-                case "$timestamp" in
-                    *.*Z)
-                        base="${timestamp%%.*}"
-                        fraction="${timestamp#*.}"
-                        fraction="${fraction%Z}"
-                        ;;
-                    *Z)
-                        base="${timestamp%Z}"
-                        fraction=""
-                        ;;
-                    *)
-                        printf '%s\n' "$timestamp"
-                        return 0
-                        ;;
-                esac
-
-                fraction="$(printf '%-9.9s' "$fraction" | tr ' ' '0')"
-                printf '%s.%sZ\n' "$base" "$fraction"
-            }
-
-            timestamp_is_at_or_after() {
-                candidate_timestamp="$(normalize_codex_session_timestamp "$1")"
-                baseline_timestamp="$(normalize_codex_session_timestamp "$2")"
-                latest_timestamp="$(
-                    LC_ALL=C printf '%s\n%s\n' "$candidate_timestamp" "$baseline_timestamp" \
-                        | LC_ALL=C sort \
-                        | tail -n 1
-                )"
-                [ "$latest_timestamp" = "$candidate_timestamp" ]
-            }
-
-            iteration=0
-            while [ "$iteration" -lt 300 ]; do
-                [ -f "$stamp_file" ] || exit 0
-                iteration=$((iteration + 1))
-
-                while IFS= read -r session_file; do
-                    [ -f "$session_file" ] || continue
-                    first_line="$(sed -n '1p' "$session_file" 2>/dev/null || true)"
-                    if ! printf '%s\n' "$first_line" | grep -F "\"cwd\":\"$cwd\"" >/dev/null; then
-                        continue
-                    fi
-
-                    session_timestamp="$(extract_codex_session_timestamp "$first_line")"
-                    if [ -n "$session_timestamp" ] && ! timestamp_is_at_or_after "$session_timestamp" "$start_timestamp"; then
-                        continue
-                    fi
-
-                    session_id="$(
-                        printf '%s\n' "$first_line" \
-                            | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' \
-                            | head -n 1
-                    )"
-                    if [ -n "$session_id" ]; then
-                        "$helper_path" codex "$surface_id" session "$session_id" || true
-                        exit 0
-                    fi
-                done <<EOF
-        $(find "$root" -type f -name 'rollout-*.jsonl' -newer "$stamp_file" -print 2>/dev/null | sort -r)
-        EOF
-
-                sleep 0.5
-            done
-        }
-
-        session_id="$(parse_codex_session_id "$@" || true)"
-        if [ -n "$session_id" ]; then
-            "$helper" codex "$surface" session "$session_id" || true
-        elif codex_is_interactive_start "${1:-}"; then
-            stamp_file="${TMPDIR:-/tmp}/schmux-codex-${surface}-$$.stamp"
-            start_timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-            : > "$stamp_file"
-            monitor_codex_session "$stamp_file" "$start_timestamp" "$helper" "$surface" >/dev/null 2>&1 &
-            monitor_pid="$!"
+        if ! "$real" --help 2>&1 | /usr/bin/grep -Fq -- "--dangerously-bypass-hook-trust"; then
+            exec "$real" "$@"
         fi
 
-        notify_config="notify=[\"$SHELLRAISER_HELPER_PATH\",\"codex\",\"$SHELLRAISER_SURFACE_ID\",\"completed\"]"
         set +e
-        "$real" -c "$notify_config" "$@"
+        "$real" \
+            -c "hooks.SessionStart=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" hook-session\"}]}]" \
+            -c "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
+            -c "hooks.PreToolUse=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
+            -c "hooks.PermissionRequest=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
+            -c "hooks.Stop=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
+            "$@"
         status=$?
         set -e
-        if [ -n "${monitor_pid:-}" ]; then
-            rm -f "$stamp_file"
-            wait_attempts=0
-            while kill -0 "$monitor_pid" 2>/dev/null && [ "$wait_attempts" -lt 10 ]; do
-                sleep 0.1
-                wait_attempts=$((wait_attempts + 1))
-            done
-            if kill -0 "$monitor_pid" 2>/dev/null; then
-                kill "$monitor_pid" 2>/dev/null || true
-            fi
-            wait "$monitor_pid" 2>/dev/null || true
-        fi
         "$helper" codex "$surface" exited || true
         exit "$status"
         """#
