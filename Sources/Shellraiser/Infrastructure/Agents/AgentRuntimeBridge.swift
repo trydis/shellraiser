@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 
 /// App-owned runtime bridge that installs helper binaries for agent completion hooks.
 @MainActor
@@ -39,6 +40,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         self.copilotHomeURL = copilotHomeURL
             ?? rootURL.appendingPathComponent("copilot-home", isDirectory: true)
         prepareRuntimeSupport()
+        scheduleCopilotHookLeaseReap()
     }
 
     /// Ensures helper scripts and the completion event log exist.
@@ -75,7 +77,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 named: "shellraiser-copilot-hooks",
                 contents: copilotHookManagerContents
             )
-            try reapCopilotHookLeases()
             try writeTextFile(
                 at: zshShimDirectory.appendingPathComponent(".zshenv"),
                 contents: zshEnvContents
@@ -147,15 +148,42 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         try data.write(to: fileURL, options: .atomic)
     }
 
-    /// Reaps stale Copilot hook leases at startup without touching user-owned hook files.
-    private func reapCopilotHookLeases() throws {
+    /// Schedules one startup cleanup pass without delaying managed surface creation.
+    private func scheduleCopilotHookLeaseReap() {
         let managerURL = binDirectory.appendingPathComponent("shellraiser-copilot-hooks")
+        let runtimeDirectory = self.runtimeDirectory
+        let environment = ProcessInfo.processInfo.environment.merging(
+            ["SHELLRAISER_COPILOT_HOME": copilotHomeURL.path]
+        ) { _, bridgeValue in bridgeValue }
+
+        DispatchQueue.global(qos: .utility).async {
+            guard FileManager.default.isExecutableFile(atPath: managerURL.path) else {
+                return
+            }
+
+            do {
+                try Self.reapCopilotHookLeases(
+                    managerURL: managerURL,
+                    environment: environment
+                )
+            } catch {
+                guard FileManager.default.fileExists(atPath: runtimeDirectory.path) else {
+                    return
+                }
+                NSLog("Failed to reap stale Shellraiser Copilot hook leases: \(error)")
+            }
+        }
+    }
+
+    /// Reaps stale Copilot hook leases without touching user-owned hook files.
+    nonisolated private static func reapCopilotHookLeases(
+        managerURL: URL,
+        environment: [String: String]
+    ) throws {
         let process = Process()
         process.executableURL = managerURL
         process.arguments = ["reap"]
-        process.environment = ProcessInfo.processInfo.environment.merging(
-            ["SHELLRAISER_COPILOT_HOME": copilotHomeURL.path]
-        ) { _, bridgeValue in bridgeValue }
+        process.environment = environment
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
