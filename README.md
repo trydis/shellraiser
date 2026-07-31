@@ -22,7 +22,7 @@ Shellraiser is a macOS terminal workspace app built with SwiftUI and GhosttyKit.
 - macOS 14 or newer
 - Swift 5.9+
 - Xcode 15 or newer
-- Zig 0.15.2+ (required to build GhosttyKit from source)
+- Zig 0.16.0+ (required to build GhosttyKit from source)
 - Git submodules initialized so the bundled `ghostty/` dependency is available
 
 ## Getting Started
@@ -35,7 +35,7 @@ cd shellraiser
 git submodule update --init --recursive
 ```
 
-Build the GhosttyKit xcframework (requires [Zig 0.15.2+](https://ziglang.org/download)):
+Build the GhosttyKit xcframework (requires [Zig 0.16.0+](https://ziglang.org/download)):
 
 ```bash
 cd ghostty
