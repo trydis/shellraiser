@@ -148,6 +148,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         fi
 
         payload=""
+        session_id=""
         case "$phase" in
             started|completed|session|exited|hook-session)
                 ;;
@@ -159,6 +160,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         case "$runtime:$phase" in
             codex:session|claudeCode:session)
                 payload="${4:-}"
+                session_id="$payload"
                 ;;
             claudeCode:hook-session|codex:hook-session)
                 hook_payload="$(cat)"
@@ -170,7 +172,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 ;;
         esac
 
-        if [ "$phase" = "session" ] && [ -z "$payload" ]; then
+        if [ "$phase" = "session" ] && [ -z "$session_id" ]; then
             exit 0
         fi
 
@@ -339,14 +341,17 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         export SHELLRAISER_HELPER_PATH="$helper"
         export SHELLRAISER_SURFACE_ID="$surface"
 
+        if ! "$real" --help 2>&1 | /usr/bin/grep -Fq -- "--dangerously-bypass-hook-trust"; then
+            exec "$real" "$@"
+        fi
+
         set +e
         "$real" \
-            --dangerously-bypass-hook-trust \
-            -c "hooks.SessionStart=[{hooks=[{type=\"command\",command=\"$helper codex $surface hook-session\"}]}]" \
-            -c "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=\"$helper codex $surface started\"}]}]" \
-            -c "hooks.PreToolUse=[{matcher=\"*\",hooks=[{type=\"command\",command=\"$helper codex $surface started\"}]}]" \
-            -c "hooks.PermissionRequest=[{matcher=\"*\",hooks=[{type=\"command\",command=\"$helper codex $surface completed\"}]}]" \
-            -c "hooks.Stop=[{hooks=[{type=\"command\",command=\"$helper codex $surface completed\"}]}]" \
+            -c "hooks.SessionStart=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" hook-session\"}]}]" \
+            -c "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
+            -c "hooks.PreToolUse=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
+            -c "hooks.PermissionRequest=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
+            -c "hooks.Stop=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
             "$@"
         status=$?
         set -e
