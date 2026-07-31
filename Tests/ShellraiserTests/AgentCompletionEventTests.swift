@@ -32,6 +32,20 @@ final class AgentCompletionEventTests: XCTestCase {
         XCTAssertEqual(event?.payload, "019ce8bb-b369-7693-9be0-664a228e4e24")
     }
 
+    /// Verifies Copilot session-identity events decode through the shared event log format.
+    func testParseDecodesCopilotSessionIdentityEvent() {
+        let surfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001404")!
+        let payload = Data("4fbe8379-2298-43e8-a8e6-ae0fe9a46217".utf8).base64EncodedString()
+        let line = "2026-03-08T20:07:00Z\tcopilot\t\(surfaceId.uuidString)\tsession\t\(payload)"
+
+        let event = AgentActivityEvent.parse(line)
+
+        XCTAssertEqual(event?.agentType, .copilot)
+        XCTAssertEqual(event?.surfaceId, surfaceId)
+        XCTAssertEqual(event?.phase, .session)
+        XCTAssertEqual(event?.payload, "4fbe8379-2298-43e8-a8e6-ae0fe9a46217")
+    }
+
     /// Verifies exit lifecycle events decode without requiring a payload body.
     func testParseDecodesExitedEvent() {
         let surfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001403")!

@@ -76,6 +76,44 @@ final class WorkspaceSurfaceManagerSurfaceStateTests: WorkspaceTestCase {
         XCTAssertEqual(updatedSurface?.sessionId, "019ce8bb-b369-7693-9be0-664a228e4e24")
     }
 
+    /// Verifies Copilot stores its opaque session id and clears Claude-only transcript metadata.
+    func testSetSessionIdentityClearsTranscriptPathForCopilot() {
+        let persistence = makePersistence()
+        let manager = WorkspaceSurfaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000008B1")!,
+            title: "Copilot Surface",
+            agentType: .claudeCode,
+            sessionId: "existing-session",
+            transcriptPath: "/tmp/claude-transcript.jsonl"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-0000000008B2")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-0000000008B3")!
+        var workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface]),
+                focusedSurfaceId: surface.id
+            )
+        ]
+
+        manager.setSessionIdentity(
+            workspaceId: workspaceId,
+            surfaceId: surface.id,
+            agentType: .copilot,
+            sessionId: "  4fbe8379-2298-43e8-a8e6-ae0fe9a46217  ",
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+
+        let updatedSurface = self.surface(in: workspaces[0].rootPane, surfaceId: surface.id)
+        XCTAssertEqual(updatedSurface?.agentType, .copilot)
+        XCTAssertEqual(updatedSurface?.sessionId, "4fbe8379-2298-43e8-a8e6-ae0fe9a46217")
+        XCTAssertEqual(updatedSurface?.transcriptPath, "")
+        XCTAssertTrue(updatedSurface?.shouldResumeSession ?? false)
+        XCTAssertEqual(persistence.load(), workspaces)
+    }
+
     /// Verifies Claude transcript state is cleared when a new session arrives without a transcript path.
     func testSetSessionIdentityClearsClaudeTranscriptPathWhenTranscriptIsMissing() {
         let persistence = makePersistence()

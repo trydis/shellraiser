@@ -4,6 +4,7 @@ import Foundation
 enum AgentType: String, Codable, CaseIterable {
     case claudeCode
     case codex
+    case copilot
 
     /// Human-readable display name for UI labels.
     var displayName: String {
@@ -12,6 +13,8 @@ enum AgentType: String, Codable, CaseIterable {
             return "Claude Code"
         case .codex:
             return "Codex"
+        case .copilot:
+            return "Copilot CLI"
         }
     }
 
@@ -26,6 +29,8 @@ enum AgentType: String, Codable, CaseIterable {
             return ("claude", ["--resume", sessionId])
         case .codex:
             return ("codex", ["resume", sessionId])
+        case .copilot:
+            return ("copilot", ["--resume", sessionId])
         }
     }
 }

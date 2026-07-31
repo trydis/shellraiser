@@ -54,6 +54,11 @@ extension WorkspaceSurfaceManager {
                         surface.transcriptPath = ""
                         didChange = true
                     }
+                case .copilot:
+                    if !surface.transcriptPath.isEmpty {
+                        surface.transcriptPath = ""
+                        didChange = true
+                    }
                 }
 
                 if !surface.shouldResumeSession {
@@ -78,6 +83,8 @@ extension WorkspaceSurfaceManager {
             return trimmedSessionId.lowercased()
         case .codex:
             return trimmedSessionId
+        case .copilot:
+            return trimmedSessionId
         }
     }
 
@@ -90,6 +97,8 @@ extension WorkspaceSurfaceManager {
         case .claudeCode:
             return trimmedTranscriptPath
         case .codex:
+            return ""
+        case .copilot:
             return ""
         }
     }

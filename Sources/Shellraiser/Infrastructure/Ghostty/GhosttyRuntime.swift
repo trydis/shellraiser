@@ -1243,6 +1243,8 @@ final class GhosttyRuntime {
             return surfaceModel.agentType.resumeCommand(sessionId: surfaceModel.sessionId)
         case .codex:
             return surfaceModel.agentType.resumeCommand(sessionId: surfaceModel.sessionId)
+        case .copilot:
+            return surfaceModel.agentType.resumeCommand(sessionId: surfaceModel.sessionId)
         }
     }
 

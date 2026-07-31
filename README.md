@@ -12,7 +12,8 @@ Shellraiser is a macOS terminal workspace app built with SwiftUI and GhosttyKit.
 - AppleScript support for creating workspaces, splitting terminals, focusing surfaces, sending keys, and inputting text
 - macOS notifications — native notification when an agent turn completes in an unfocused surface; click to jump to it
 - Git branch display — sidebar shows current branch name and a linked-worktree indicator per workspace
-- Session resume — agent sessions (Claude Code, Codex) persist across app restarts
+- Managed agent sessions — Claude Code, Codex, and Copilot CLI report activity and completion state to Shellraiser
+- Session resume — Claude Code, Codex, and Copilot CLI sessions persist across app restarts
 - Workspace persistence — full layout, pane tree, and surface state saved/restored automatically
 - Pane zoom — toggle any split pane to fill the workspace area (Cmd+Shift+Return)
 - Ghostty theming — terminal appearance driven by Ghostty config (background, foreground, opacity, blur, split divider color, unfocused split dimming)
@@ -48,6 +49,12 @@ Run the app locally:
 ```bash
 make run
 ```
+
+## Copilot CLI
+
+Shellraiser supports interactive [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli) sessions and resumes them with their saved session ID after an app restart. Install and authenticate the `copilot` command before starting a session.
+
+While a Copilot session is active, Shellraiser creates its own temporary user hook file to receive lifecycle events for activity and completion tracking. It leaves existing Copilot user, repository, policy, and plugin hooks unchanged. If Shellraiser stops unexpectedly, the hook remains while the Copilot process is alive; stale Shellraiser hook state is removed the next time Shellraiser or a managed Copilot session starts.
 
 ## Automation
 

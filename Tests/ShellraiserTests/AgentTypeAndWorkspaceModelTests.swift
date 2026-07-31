@@ -9,11 +9,14 @@ final class AgentTypeAndWorkspaceModelTests: XCTestCase {
 
         let claudeResumeCommand = AgentType.claudeCode.resumeCommand(sessionId: "abc123")
         let codexResumeCommand = AgentType.codex.resumeCommand(sessionId: "xyz789")
+        let copilotResumeCommand = AgentType.copilot.resumeCommand(sessionId: "copilot-session")
 
         XCTAssertEqual(claudeResumeCommand?.command, "claude")
         XCTAssertEqual(claudeResumeCommand?.arguments, ["--resume", "abc123"])
         XCTAssertEqual(codexResumeCommand?.command, "codex")
         XCTAssertEqual(codexResumeCommand?.arguments, ["resume", "xyz789"])
+        XCTAssertEqual(copilotResumeCommand?.command, "copilot")
+        XCTAssertEqual(copilotResumeCommand?.arguments, ["--resume", "copilot-session"])
     }
 
     /// Verifies a new workspace starts focused on its initial surface.
