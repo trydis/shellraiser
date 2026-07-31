@@ -229,8 +229,8 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
-    /// Verifies Codex started events are ignored so launch does not mark a workspace busy.
-    func testCodexStartedEventDoesNotMarkWorkspaceBusy() {
+    /// Verifies Codex started events mark a workspace busy through the native hook.
+    func testCodexStartedEventMarksWorkspaceBusy() {
         let eventMonitor = MockAgentActivityEventMonitor()
         let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
         let surface = makeSurface(
@@ -259,7 +259,7 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
             )
         )
 
-        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+        XCTAssertTrue(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
     /// Verifies session-identity events persist the resolved runtime and resume identifier.
@@ -472,8 +472,8 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
-    /// Verifies Codex submit input marks the workspace busy once runtime session identity is known.
-    func testHandleSurfaceInputMarksCodexBusyAfterSessionEvent() {
+    /// Verifies Codex submit input does not mark busy; the native hook owns that transition.
+    func testHandleSurfaceInputDoesNotMarkCodexBusyAfterSessionEvent() {
         let eventMonitor = MockAgentActivityEventMonitor()
         let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
         let surface = makeSurface(
@@ -508,7 +508,7 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
             input: .userSubmit
         )
 
-        XCTAssertTrue(manager.isWorkspaceWorking(workspaceId: workspaceId))
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
     }
 
     /// Verifies non-submit Codex input does not mark the workspace busy after session discovery.
