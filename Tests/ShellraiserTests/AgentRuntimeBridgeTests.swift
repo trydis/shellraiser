@@ -83,11 +83,12 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
 
-        XCTAssertTrue(helperContents.contains("codex:completed)"))
         XCTAssertTrue(helperContents.contains("codex:session|claudeCode:session)"))
+        XCTAssertTrue(helperContents.contains("claudeCode:hook-session|codex:hook-session)"))
         XCTAssertTrue(helperContents.contains("/usr/bin/lockf"))
         XCTAssertTrue(helperContents.contains("${SHELLRAISER_EVENT_LOG}.lock"))
         XCTAssertFalse(helperContents.contains("\n            codex)\n"))
+        XCTAssertFalse(helperContents.contains("codex:completed)"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: lockURL.path))
     }
 
@@ -102,30 +103,36 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let claudeWrapperContents = try String(contentsOf: claudeWrapperURL, encoding: .utf8)
         let codexWrapperContents = try String(contentsOf: codexWrapperURL, encoding: .utf8)
 
+        // Claude wrapper: hook-based session and lifecycle
         XCTAssertTrue(claudeWrapperContents.contains("hook-session"))
         XCTAssertTrue(claudeWrapperContents.contains("lookup_path=\"${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}\""))
         XCTAssertTrue(claudeWrapperContents.contains("PATH=\"$lookup_path\" /usr/bin/which claude"))
         XCTAssertFalse(claudeWrapperContents.contains("SHELLRAISER_PREFERRED_CLAUDE_SESSION_ID"))
         XCTAssertFalse(claudeWrapperContents.contains("--session-id"))
         XCTAssertTrue(claudeWrapperContents.contains("claudeCode \"$surface\" exited"))
-        XCTAssertTrue(codexWrapperContents.contains("monitor_codex_session"))
+
+        // Codex wrapper: native hooks replace polling heuristics
+        XCTAssertTrue(codexWrapperContents.contains("--dangerously-bypass-hook-trust"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.SessionStart"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.UserPromptSubmit"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.PreToolUse"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.PermissionRequest"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.Stop"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface hook-session"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface started"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface completed"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface exited"))
         XCTAssertTrue(codexWrapperContents.contains("lookup_path=\"${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}\""))
         XCTAssertTrue(codexWrapperContents.contains("PATH=\"$lookup_path\" /usr/bin/which codex"))
-        XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" session"))
-        XCTAssertTrue(codexWrapperContents.contains("codex \"$surface\" exited"))
-        XCTAssertFalse(codexWrapperContents.contains("codex \"$surface\" started"))
-        XCTAssertTrue(codexWrapperContents.contains("extract_codex_session_timestamp"))
-        XCTAssertFalse(codexWrapperContents.contains("extract_codex_surface_id"))
-        XCTAssertFalse(codexWrapperContents.contains("surface_matches_current_codex_session"))
-        XCTAssertTrue(codexWrapperContents.contains("normalize_codex_session_timestamp"))
-        XCTAssertTrue(codexWrapperContents.contains("timestamp_is_at_or_after"))
-        XCTAssertTrue(codexWrapperContents.contains("while [ \"$iteration\" -lt 300 ]; do"))
-        XCTAssertTrue(codexWrapperContents.contains("iteration=$((iteration + 1))"))
-        XCTAssertFalse(codexWrapperContents.contains("while :; do"))
-        XCTAssertTrue(codexWrapperContents.contains("printf '%-9.9s'"))
-        XCTAssertTrue(codexWrapperContents.contains("monitor_pid=\"$!\""))
-        XCTAssertTrue(codexWrapperContents.contains("rm -f \"$stamp_file\""))
-        XCTAssertTrue(codexWrapperContents.contains("wait \"$monitor_pid\" 2>/dev/null || true"))
+        XCTAssertTrue(codexWrapperContents.contains("--dangerously-bypass-hook-trust"))
+        XCTAssertTrue(codexWrapperContents.contains("hooks.SessionStart"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface hook-session"))
+        XCTAssertTrue(codexWrapperContents.contains("codex $surface exited"))
+        XCTAssertFalse(codexWrapperContents.contains("monitor_codex_session"))
+        XCTAssertFalse(codexWrapperContents.contains("extract_codex_session_timestamp"))
+        XCTAssertFalse(codexWrapperContents.contains("normalize_codex_session_timestamp"))
+        XCTAssertFalse(codexWrapperContents.contains("monitor_pid"))
+        XCTAssertFalse(codexWrapperContents.contains("notify_config"))
     }
 
     /// Verifies the zsh shim sources Ghostty shell integration when the runtime is active.
@@ -146,8 +153,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(zshRcContents.contains("shell-integration/zsh/ghostty-integration"))
     }
 
-    /// Verifies the helper can extract Claude hook session identifiers from stdin payloads.
-    func testPrepareRuntimeSupportWritesHelperWithClaudeHookSessionParsing() throws {
+    /// Verifies the helper can extract session identifiers from hook payloads for both runtimes.
+    func testPrepareRuntimeSupportWritesHelperWithHookSessionParsing() throws {
         let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
 
@@ -155,7 +162,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
 
-        XCTAssertTrue(helperContents.contains("claudeCode:hook-session"))
+        // Both runtimes share the same sed-based JSON extraction via a unified case branch.
+        XCTAssertTrue(helperContents.contains("claudeCode:hook-session|codex:hook-session)"))
         XCTAssertTrue(helperContents.contains("\"session_id\""))
         XCTAssertTrue(helperContents.contains("\"transcript_path\""))
         XCTAssertFalse(helperContents.contains("/usr/bin/python3"))

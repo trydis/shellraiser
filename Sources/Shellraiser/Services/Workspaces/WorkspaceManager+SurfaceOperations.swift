@@ -42,7 +42,6 @@ extension WorkspaceManager {
         GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
         clearBusySurface(surfaceId)
-        clearLiveCodexSessionSurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
         clearProgressReport(surfaceId: surfaceId)
 
@@ -126,7 +125,7 @@ extension WorkspaceManager {
         )
     }
 
-    /// Records terminal activity and marks gated Codex submit events as busy.
+    /// Records terminal activity for idle-state tracking.
     func handleSurfaceInput(workspaceId: UUID, surfaceId: UUID, input: SurfaceInputEvent) {
         surfaceManager.setIdleState(
             workspaceId: workspaceId,
@@ -135,17 +134,6 @@ extension WorkspaceManager {
             workspaces: &workspaces,
             persistence: persistence
         )
-
-        guard let workspace = workspace(id: workspaceId),
-              let surface = surface(in: workspace.rootPane, surfaceId: surfaceId),
-              surface.agentType == .codex else {
-            return
-        }
-
-        guard input.isSubmit else { return }
-        guard liveCodexSessionSurfaceIds.contains(surfaceId) else { return }
-
-        markSurfaceBusy(surfaceId)
     }
 
     /// Interval after which a progress report is automatically cleared if no update arrives.
