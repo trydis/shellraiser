@@ -79,6 +79,35 @@ final class GhosttyRuntimeCommandTests: XCTestCase {
         XCTAssertFalse(command.contains("/bin/zsh"))
     }
 
+    /// Verifies Copilot resumes the specific persisted session rather than the CLI's latest session.
+    func testLaunchCommandUsesCopilotResumeCommandWhenSurfaceHasPersistedSessionId() {
+        let surface = SurfaceModel(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000705")!,
+            title: "~",
+            agentType: .copilot,
+            sessionId: "4fbe8379-2298-43e8-a8e6-ae0fe9a46217",
+            shouldResumeSession: true,
+            terminalConfig: TerminalPanelConfig(
+                workingDirectory: "/tmp/project",
+                shell: "/bin/zsh",
+                environment: [:]
+            ),
+            isIdle: false,
+            hasUnreadIdleNotification: false,
+            hasPendingCompletion: false,
+            pendingCompletionSequence: nil,
+            lastCompletionAt: nil,
+            lastActivity: Date(timeIntervalSince1970: 1_700_000_100)
+        )
+
+        let command = GhosttyRuntime.launchCommand(for: surface, terminalConfig: surface.terminalConfig)
+
+        XCTAssertTrue(command.contains("copilot"))
+        XCTAssertTrue(command.contains("--resume"))
+        XCTAssertTrue(command.contains("4fbe8379-2298-43e8-a8e6-ae0fe9a46217"))
+        XCTAssertFalse(command.contains("/bin/zsh"))
+    }
+
     /// Verifies Claude only relaunches with resume when its persisted transcript exists on disk.
     func testLaunchCommandUsesClaudeResumeWhenTranscriptExists() throws {
         let transcriptURL = FileManager.default.temporaryDirectory

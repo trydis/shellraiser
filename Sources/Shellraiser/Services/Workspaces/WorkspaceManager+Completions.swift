@@ -221,6 +221,8 @@ extension WorkspaceManager {
             return (sessionId, transcriptPath)
         case .codex:
             return (event.payload, nil)
+        case .copilot:
+            return (event.payload, nil)
         }
     }
 

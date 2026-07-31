@@ -12,7 +12,8 @@ Shellraiser is a macOS terminal workspace app built with SwiftUI and GhosttyKit.
 - AppleScript support for creating workspaces, splitting terminals, focusing surfaces, sending keys, and inputting text
 - macOS notifications — native notification when an agent turn completes in an unfocused surface; click to jump to it
 - Git branch display — sidebar shows current branch name and a linked-worktree indicator per workspace
-- Session resume — agent sessions (Claude Code, Codex) persist across app restarts
+- Managed agent sessions — Claude Code, Codex, and Copilot CLI report activity and completion state to Shellraiser
+- Session resume — Claude Code, Codex, and Copilot CLI sessions persist across app restarts
 - Workspace persistence — full layout, pane tree, and surface state saved/restored automatically
 - Pane zoom — toggle any split pane to fill the workspace area (Cmd+Shift+Return)
 - Ghostty theming — terminal appearance driven by Ghostty config (background, foreground, opacity, blur, split divider color, unfocused split dimming)

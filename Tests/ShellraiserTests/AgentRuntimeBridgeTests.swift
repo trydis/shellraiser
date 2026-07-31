@@ -42,11 +42,13 @@ final class AgentRuntimeBridgeTests: XCTestCase {
             environment["SHELLRAISER_HELPER_PATH"],
             bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete").path
         )
+        XCTAssertEqual(environment["SHELLRAISER_COPILOT_HOME"], bridge.copilotHomeURL.path)
         XCTAssertEqual(environment["ZDOTDIR"], bridge.zshShimDirectory.path)
         XCTAssertEqual(environment["SHELLRAISER_WRAPPER_BIN"], bridge.binDirectory.path)
         XCTAssertEqual(environment["SHELLRAISER_ORIGINAL_PATH"], "/usr/local/bin:/usr/bin:/bin")
         XCTAssertNil(environment["SHELLRAISER_REAL_CLAUDE"])
         XCTAssertNil(environment["SHELLRAISER_REAL_CODEX"])
+        XCTAssertNil(environment["SHELLRAISER_REAL_COPILOT"])
     }
 
     /// Verifies the Claude wrapper emits start, stop, permission-request, and selected notification hooks.
@@ -73,8 +75,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertFalse(wrapperContents.contains("\"SubagentStop\""))
     }
 
-    /// Verifies the helper script only matches fully qualified Codex runtime phases.
-    func testPrepareRuntimeSupportWritesHelperWithoutBareCodexCase() throws {
+    /// Verifies the helper script only matches fully qualified managed runtime phases.
+    func testPrepareRuntimeSupportWritesHelperWithoutBareRuntimeCases() throws {
         let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
         let lockURL = bridge.runtimeDirectory.appendingPathComponent("agent-completions.log.lock")
@@ -83,8 +85,10 @@ final class AgentRuntimeBridgeTests: XCTestCase {
 
         let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
 
-        XCTAssertTrue(helperContents.contains("codex:session|claudeCode:session)"))
+        XCTAssertTrue(helperContents.contains("codex:session|claudeCode:session|copilot:session)"))
         XCTAssertTrue(helperContents.contains("claudeCode:hook-session|codex:hook-session)"))
+        XCTAssertTrue(helperContents.contains("copilot:hook-session)"))
+        XCTAssertTrue(helperContents.contains("\"sessionId\""))
         XCTAssertTrue(helperContents.contains("session_id=\"\""))
         XCTAssertTrue(helperContents.contains("if [ \"$phase\" = \"session\" ] && [ -z \"$session_id\" ]; then"))
         XCTAssertTrue(helperContents.contains("/usr/bin/lockf"))
@@ -99,11 +103,15 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         let bridge = try makeBridge()
         let claudeWrapperURL = bridge.binDirectory.appendingPathComponent("claude")
         let codexWrapperURL = bridge.binDirectory.appendingPathComponent("codex")
+        let copilotWrapperURL = bridge.binDirectory.appendingPathComponent("copilot")
+        let copilotHookManagerURL = bridge.binDirectory.appendingPathComponent("shellraiser-copilot-hooks")
 
         bridge.prepareRuntimeSupport()
 
         let claudeWrapperContents = try String(contentsOf: claudeWrapperURL, encoding: .utf8)
         let codexWrapperContents = try String(contentsOf: codexWrapperURL, encoding: .utf8)
+        let copilotWrapperContents = try String(contentsOf: copilotWrapperURL, encoding: .utf8)
+        let copilotHookManagerContents = try String(contentsOf: copilotHookManagerURL, encoding: .utf8)
 
         // Claude wrapper: hook-based session and lifecycle
         XCTAssertTrue(claudeWrapperContents.contains("hook-session"))
@@ -132,6 +140,26 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertFalse(codexWrapperContents.contains("normalize_codex_session_timestamp"))
         XCTAssertFalse(codexWrapperContents.contains("monitor_pid"))
         XCTAssertFalse(codexWrapperContents.contains("notify_config"))
+
+        // Copilot: managed user hook file with a supervised, crash-recoverable lease.
+        XCTAssertTrue(copilotWrapperContents.contains("SHELLRAISER_REAL_COPILOT"))
+        XCTAssertTrue(copilotWrapperContents.contains("PATH=\"$lookup_path\" /usr/bin/which copilot"))
+        XCTAssertTrue(copilotWrapperContents.contains("\"$manager\" acquire \"$$\""))
+        XCTAssertTrue(copilotWrapperContents.contains("\"$manager\" replace \"$lease\" \"$child\""))
+        XCTAssertTrue(copilotWrapperContents.contains("\"$helper\" copilot \"$surface\" exited"))
+        XCTAssertTrue(copilotWrapperContents.contains("\"$real\" \"$@\" < /dev/tty &"))
+        XCTAssertTrue(copilotWrapperContents.contains("/bin/kill \"-$signal\" \"$child\""))
+        XCTAssertTrue(copilotWrapperContents.contains("wait \"$child\" || true"))
+        XCTAssertTrue(copilotHookManagerContents.contains("shellraiser-managed.json"))
+        XCTAssertTrue(copilotHookManagerContents.contains("\"sessionStart\""))
+        XCTAssertTrue(copilotHookManagerContents.contains("\"userPromptSubmitted\""))
+        XCTAssertTrue(copilotHookManagerContents.contains("\"preToolUse\""))
+        XCTAssertTrue(copilotHookManagerContents.contains("\"agentStop\""))
+        XCTAssertTrue(copilotHookManagerContents.contains("\"sessionEnd\""))
+        XCTAssertTrue(copilotHookManagerContents.contains("permission_prompt|elicitation_dialog"))
+        XCTAssertTrue(copilotHookManagerContents.contains("copilot-leases"))
+        XCTAssertTrue(copilotHookManagerContents.contains("fingerprint"))
+        XCTAssertTrue(copilotHookManagerContents.contains("/usr/bin/lockf"))
     }
 
     /// Verifies the zsh shim sources Ghostty shell integration when the runtime is active.
@@ -152,7 +180,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(zshRcContents.contains("shell-integration/zsh/ghostty-integration"))
     }
 
-    /// Verifies the helper can extract session identifiers from hook payloads for both runtimes.
+    /// Verifies the helper can extract session identifiers from hook payloads for all runtimes.
     func testPrepareRuntimeSupportWritesHelperWithHookSessionParsing() throws {
         let bridge = try makeBridge()
         let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
@@ -165,6 +193,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(helperContents.contains("claudeCode:hook-session|codex:hook-session)"))
         XCTAssertTrue(helperContents.contains("\"session_id\""))
         XCTAssertTrue(helperContents.contains("\"transcript_path\""))
+        XCTAssertTrue(helperContents.contains("copilot:hook-session"))
+        XCTAssertTrue(helperContents.contains("\"sessionId\""))
         XCTAssertFalse(helperContents.contains("/usr/bin/python3"))
         XCTAssertTrue(helperContents.contains("phase=\"session\""))
     }
