@@ -143,4 +143,75 @@ final class WorkspaceManagerAgentHQTests: WorkspaceTestCase {
 
         XCTAssertEqual(entries.map(\.surfaceId), [newer.id, older.id])
     }
+
+    /// Verifies renaming an Agent HQ entry updates the underlying surface's title.
+    func testRenameAgentHQEntryUpdatesSurfaceTitle() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002401")!,
+            title: "Old Title"
+        )
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000002402")!
+        manager.workspaces = [
+            makeWorkspace(id: workspaceId, name: "Workspace", rootPane: makeLeaf(surfaces: [surface]))
+        ]
+
+        let entry = manager.agentHQEntries()[0]
+        manager.renameAgentHQEntry(entry, title: "New Title")
+
+        let updatedSurface = manager.workspaces[0].rootPane.surface(id: surface.id)
+        XCTAssertEqual(updatedSurface?.title, "New Title")
+    }
+
+    /// Verifies closing a running entry consults the injected confirmer and aborts when declined.
+    func testCloseAgentHQEntryPromptsForConfirmationWhenRunningAndAbortsIfDeclined() {
+        var confirmationRequests: [SurfaceCloseRequest] = []
+        let manager = makeWorkspaceManager(confirmSurfaceClose: { request in
+            confirmationRequests.append(request)
+            return false
+        })
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002501")!,
+            title: "Long Running Task"
+        )
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000002502")!
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000002503")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface])
+            )
+        ]
+        manager.markSurfaceBusy(surface.id)
+
+        let entry = manager.agentHQEntries()[0]
+        XCTAssertEqual(entry.status, .running)
+        manager.closeAgentHQEntry(entry)
+
+        XCTAssertEqual(confirmationRequests.count, 1)
+        XCTAssertEqual(confirmationRequests[0].surfaceId, surface.id)
+        XCTAssertEqual(confirmationRequests[0].surfaceTitle, "Long Running Task")
+        // Declined confirmation must leave the surface in place.
+        XCTAssertNotNil(manager.workspaces[0].rootPane.surface(id: surface.id))
+    }
+
+    /// Verifies closing a non-running entry does not prompt for confirmation.
+    func testCloseAgentHQEntrySkipsConfirmationWhenNotRunning() {
+        var confirmationRequestCount = 0
+        let manager = makeWorkspaceManager(confirmSurfaceClose: { _ in
+            confirmationRequestCount += 1
+            return true
+        })
+        let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000002601")!)
+        manager.workspaces = [
+            makeWorkspace(name: "Workspace", rootPane: makeLeaf(surfaces: [surface]))
+        ]
+
+        let entry = manager.agentHQEntries()[0]
+        XCTAssertEqual(entry.status, .idle)
+        manager.closeAgentHQEntry(entry)
+
+        XCTAssertEqual(confirmationRequestCount, 0)
+    }
 }

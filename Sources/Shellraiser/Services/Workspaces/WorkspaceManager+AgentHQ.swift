@@ -46,4 +46,41 @@ extension WorkspaceManager {
 
         return AgentHQEntry.sorted(entries)
     }
+
+    /// Jumps to an Agent HQ entry's surface, mirroring the `Cmd+Shift+U` completion jump.
+    func activateAgentHQEntry(_ entry: AgentHQEntry) {
+        focusCompletionSurface(entry.surfaceId)
+    }
+
+    /// Renames an Agent HQ entry's surface tab title.
+    func renameAgentHQEntry(_ entry: AgentHQEntry, title: String) {
+        setSurfaceTitle(workspaceId: entry.workspaceId, surfaceId: entry.surfaceId, title: title)
+    }
+
+    /// Closes an Agent HQ entry's surface, confirming first when the agent is still running.
+    func closeAgentHQEntry(_ entry: AgentHQEntry) {
+        if entry.status == .running {
+            let request = SurfaceCloseRequest(
+                workspaceId: entry.workspaceId,
+                paneId: entry.paneId,
+                surfaceId: entry.surfaceId,
+                surfaceTitle: entry.title
+            )
+            guard confirmSurfaceClose(request) else { return }
+        }
+
+        closeSurface(workspaceId: entry.workspaceId, paneId: entry.paneId, surfaceId: entry.surfaceId)
+    }
+
+    /// Dismisses a pending completion for an Agent HQ entry without jumping to it.
+    func dismissAgentHQEntryCompletion(_ entry: AgentHQEntry) {
+        surfaceManager.clearPendingCompletion(
+            workspaceId: entry.workspaceId,
+            surfaceId: entry.surfaceId,
+            workspaces: &workspaces,
+            persistence: persistence
+        )
+        completionNotifications.removeNotifications(for: entry.surfaceId)
+        updateDockBadge()
+    }
 }

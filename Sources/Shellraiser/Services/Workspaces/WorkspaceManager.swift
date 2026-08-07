@@ -40,6 +40,17 @@ struct WorkspaceRenameRequest: Identifiable {
     var id: UUID { workspaceId }
 }
 
+/// Pending confirmation before closing a surface that is actively running an agent.
+struct SurfaceCloseRequest: Identifiable {
+    let workspaceId: UUID
+    let paneId: UUID
+    let surfaceId: UUID
+    let surfaceTitle: String
+
+    /// Stable identity used by confirmation flows and tests.
+    var id: UUID { surfaceId }
+}
+
 /// Central app-state manager for window, workspace, pane, and surface operations.
 @MainActor
 final class WorkspaceManager: ObservableObject {
@@ -48,6 +59,9 @@ final class WorkspaceManager: ObservableObject {
 
     /// Presents workspace-deletion confirmation and returns whether deletion should continue.
     typealias WorkspaceDeletionConfirmer = (WorkspaceDeletionRequest) -> Bool
+
+    /// Presents surface-close confirmation and returns whether closing should continue.
+    typealias SurfaceCloseConfirmer = (SurfaceCloseRequest) -> Bool
 
     /// App-owned commands that operate on the focused pane and its active tab.
     enum FocusedPaneCommand {
@@ -94,6 +108,7 @@ final class WorkspaceManager: ObservableObject {
     let gitStateResolver: GitStateResolver
     let sessionSummaryService: SessionSummaryService
     let confirmWorkspaceDeletion: WorkspaceDeletionConfirmer
+    let confirmSurfaceClose: SurfaceCloseConfirmer
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
     var recentlyHandledSurfaceFadeStarts: [UUID: Date] = [:]
@@ -112,6 +127,7 @@ final class WorkspaceManager: ObservableObject {
         activityEventMonitor: (any AgentActivityEventMonitoring)? = nil,
         registersLocalShortcutMonitor: Bool = true,
         confirmWorkspaceDeletion: @escaping WorkspaceDeletionConfirmer = WorkspaceManager.presentWorkspaceDeletionConfirmation,
+        confirmSurfaceClose: @escaping SurfaceCloseConfirmer = WorkspaceManager.presentSurfaceCloseConfirmation,
         gitStateResolver: @escaping GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
         },
@@ -131,6 +147,7 @@ final class WorkspaceManager: ObservableObject {
         resolvedRuntimeBridge.prepareRuntimeSupport()
         self.activityEventMonitor = resolvedActivityEventMonitor
         self.confirmWorkspaceDeletion = confirmWorkspaceDeletion
+        self.confirmSurfaceClose = confirmSurfaceClose
         self.gitStateResolver = gitStateResolver
         self.sessionSummaryService = sessionSummaryService
 
@@ -164,6 +181,17 @@ final class WorkspaceManager: ObservableObject {
         alert.informativeText = "\(request.workspaceName) has \(request.activeProcessCount) active terminal\(request.activeProcessCount == 1 ? "" : "s"). Deleting it will close those processes."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete Workspace")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// Presents the default AppKit confirmation used before closing a session that is actively running.
+    private static func presentSurfaceCloseConfirmation(_ request: SurfaceCloseRequest) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Close Running Session?"
+        alert.informativeText = "\"\(request.surfaceTitle)\" is still running an agent. Closing it will terminate that process."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Close Session")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }

@@ -5,6 +5,9 @@ struct AgentHQRow: View {
     let entry: AgentHQEntry
     let isSelected: Bool
     let onActivate: () -> Void
+    let onRename: () -> Void
+    let onClose: () -> Void
+    let onDismissCompletion: () -> Void
 
     var body: some View {
         Button(action: onActivate) {
@@ -55,6 +58,41 @@ struct AgentHQRow: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            contextMenuContent
+        }
+    }
+
+    /// Row-scoped actions: jump, rename, dismiss pending completion, and close.
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        Button {
+            onActivate()
+        } label: {
+            Label("Jump to Session", systemImage: "arrow.right.circle")
+        }
+
+        Button {
+            onRename()
+        } label: {
+            Label("Rename…", systemImage: "pencil")
+        }
+
+        if entry.status == .ready {
+            Button {
+                onDismissCompletion()
+            } label: {
+                Label("Dismiss", systemImage: "checkmark.circle")
+            }
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            onClose()
+        } label: {
+            Label("Close Session", systemImage: "xmark.circle")
+        }
     }
 
     /// Compact status icon shown at the leading edge of the row.

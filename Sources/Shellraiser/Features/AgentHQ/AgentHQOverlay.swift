@@ -3,13 +3,25 @@ import SwiftUI
 /// Sheet wrapper for the Agent HQ cross-workspace session dashboard.
 struct AgentHQSheet: View {
     @ObservedObject var manager: WorkspaceManager
+    @State private var renameTarget: AgentHQEntry?
+    @State private var renameValue = ""
 
     var body: some View {
         AgentHQOverlay(
             entries: manager.agentHQEntries(),
             onSelect: { entry in
-                manager.focusCompletionSurface(entry.surfaceId)
+                manager.activateAgentHQEntry(entry)
                 manager.dismissAgentHQ()
+            },
+            onRename: { entry in
+                renameValue = entry.title
+                renameTarget = entry
+            },
+            onClose: { entry in
+                manager.closeAgentHQEntry(entry)
+            },
+            onDismissCompletion: { entry in
+                manager.dismissAgentHQEntryCompletion(entry)
             },
             onDismiss: {
                 manager.dismissAgentHQ()
@@ -17,6 +29,17 @@ struct AgentHQSheet: View {
         )
         .frame(minWidth: 760, idealWidth: 860, maxWidth: 960)
         .presentationBackground(.clear)
+        .sheet(item: $renameTarget) { target in
+            WorkspaceNameSheet(
+                title: "Rename Session",
+                message: "Adjust the tab label without disturbing the running session.",
+                actionTitle: "Rename",
+                value: $renameValue
+            ) {
+                manager.renameAgentHQEntry(target, title: renameValue)
+                renameTarget = nil
+            }
+        }
     }
 }
 
@@ -27,6 +50,9 @@ struct AgentHQSheet: View {
 struct AgentHQOverlay: View {
     let entries: [AgentHQEntry]
     let onSelect: (AgentHQEntry) -> Void
+    let onRename: (AgentHQEntry) -> Void
+    let onClose: (AgentHQEntry) -> Void
+    let onDismissCompletion: (AgentHQEntry) -> Void
     let onDismiss: () -> Void
 
     @State private var query = ""
@@ -76,6 +102,15 @@ struct AgentHQOverlay: View {
                                         isSelected: selectedEntry?.id == entry.id,
                                         onActivate: {
                                             onSelect(entry)
+                                        },
+                                        onRename: {
+                                            onRename(entry)
+                                        },
+                                        onClose: {
+                                            onClose(entry)
+                                        },
+                                        onDismissCompletion: {
+                                            onDismissCompletion(entry)
                                         }
                                     )
                                     .id(entry.id)
@@ -171,6 +206,33 @@ struct AgentHQOverlay: View {
                 }
             }
             .keyboardShortcut(.return, modifiers: [])
+            .opacity(0)
+            .accessibilityHidden(true)
+
+            Button("") {
+                if let selectedEntry {
+                    onRename(selectedEntry)
+                }
+            }
+            .keyboardShortcut("r", modifiers: [.command])
+            .opacity(0)
+            .accessibilityHidden(true)
+
+            Button("") {
+                if let selectedEntry, selectedEntry.status == .ready {
+                    onDismissCompletion(selectedEntry)
+                }
+            }
+            .keyboardShortcut("d", modifiers: [.command])
+            .opacity(0)
+            .accessibilityHidden(true)
+
+            Button("") {
+                if let selectedEntry {
+                    onClose(selectedEntry)
+                }
+            }
+            .keyboardShortcut(.delete, modifiers: [.command])
             .opacity(0)
             .accessibilityHidden(true)
         }
