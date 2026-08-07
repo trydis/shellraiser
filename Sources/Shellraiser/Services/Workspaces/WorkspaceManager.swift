@@ -77,10 +77,12 @@ final class WorkspaceManager: ObservableObject {
     @Published var awaitingInputSurfaceIds: Set<UUID> = []
     @Published var liveCodexSessionSurfaceIds: Set<UUID> = []
     @Published var progressBySurfaceId: [UUID: SurfaceProgressReport] = [:]
+    @Published var sessionSummariesBySurfaceId: [UUID: String] = [:]
     var progressClearTimers: [UUID: Timer] = [:]
     /// Monotonically-increasing generation counter per surface; used to detect stale timer callbacks.
     var progressTimerGeneration: [UUID: Int] = [:]
     var gitBranchTasks: [UUID: Task<Void, Never>] = [:]
+    var sessionSummaryTasks: [UUID: Task<Void, Never>] = [:]
 
     let persistence: any WorkspacePersisting
     let workspaceCatalog: WorkspaceCatalogManager
@@ -89,6 +91,7 @@ final class WorkspaceManager: ObservableObject {
     let completionNotifications: any AgentCompletionNotificationManaging
     let activityEventMonitor: any AgentActivityEventMonitoring
     let gitStateResolver: GitStateResolver
+    let sessionSummaryService: SessionSummaryService
     let confirmWorkspaceDeletion: WorkspaceDeletionConfirmer
     var localShortcutMonitor: Any?
     var nextPendingCompletionSequence = 1
@@ -110,7 +113,8 @@ final class WorkspaceManager: ObservableObject {
         confirmWorkspaceDeletion: @escaping WorkspaceDeletionConfirmer = WorkspaceManager.presentWorkspaceDeletionConfirmation,
         gitStateResolver: @escaping GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
-        }
+        },
+        sessionSummaryService: SessionSummaryService = SessionSummaryService()
     ) {
         let resolvedRuntimeBridge = runtimeBridge ?? AgentRuntimeBridge.shared
         let resolvedActivityEventMonitor = activityEventMonitor
@@ -127,6 +131,7 @@ final class WorkspaceManager: ObservableObject {
         self.activityEventMonitor = resolvedActivityEventMonitor
         self.confirmWorkspaceDeletion = confirmWorkspaceDeletion
         self.gitStateResolver = gitStateResolver
+        self.sessionSummaryService = sessionSummaryService
 
         completionNotifications.onActivateSurface = { [weak self] surfaceId in
             Task { @MainActor in
