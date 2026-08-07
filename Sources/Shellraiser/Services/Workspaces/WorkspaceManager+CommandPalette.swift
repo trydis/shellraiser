@@ -74,6 +74,20 @@ extension WorkspaceManager {
             }
         )
 
+        items.append(
+            CommandPaletteItem(
+                id: "workspace.next-awaiting-input",
+                title: "Jump To Next Session Awaiting Input",
+                category: "Workspace",
+                systemImage: "exclamationmark.bubble.fill",
+                shortcut: "cmd-shift-i",
+                isEnabled: hasAwaitingInput,
+                keywords: ["approval", "permission", "input", "waiting", "blocked", "needs", "queue", "next"]
+            ) {
+                self.jumpToNextSessionAwaitingInput()
+            }
+        )
+
         items.append(contentsOf: paneCommandPaletteItems())
         items.append(contentsOf: terminalCommandPaletteItems())
 

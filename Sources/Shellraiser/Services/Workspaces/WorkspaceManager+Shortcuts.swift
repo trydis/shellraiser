@@ -88,6 +88,11 @@ extension WorkspaceManager {
             return true
         }
 
+        if key == "i", hasShift {
+            jumpToNextSessionAwaitingInput()
+            return true
+        }
+
         if key == "w", hasShift {
             requestDeleteSelectedWorkspace()
             return true

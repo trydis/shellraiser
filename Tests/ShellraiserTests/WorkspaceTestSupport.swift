@@ -190,12 +190,17 @@ final class MockAgentRuntimeBridge: AgentRuntimeSupporting {
 /// Notification-manager test double that records scheduling and removal.
 final class MockAgentCompletionNotificationManager: AgentCompletionNotificationManaging {
     var onActivateSurface: ((UUID) -> Void)?
-    private(set) var scheduledNotifications: [(target: PendingCompletionTarget, workspaceName: String)] = []
+    private(set) var scheduledNotifications: [(target: PendingCompletionTarget, workspaceName: String, kind: AgentNotificationKind)] = []
     private(set) var removedSurfaceIds: [UUID] = []
 
-    /// Records notification scheduling requests.
+    /// Records notification scheduling requests (defaults to .finished kind).
     func scheduleNotification(target: PendingCompletionTarget, workspaceName: String) {
-        scheduledNotifications.append((target: target, workspaceName: workspaceName))
+        scheduledNotifications.append((target: target, workspaceName: workspaceName, kind: .finished))
+    }
+
+    /// Records notification scheduling requests with explicit kind.
+    func scheduleNotification(target: PendingCompletionTarget, workspaceName: String, kind: AgentNotificationKind) {
+        scheduledNotifications.append((target: target, workspaceName: workspaceName, kind: kind))
     }
 
     /// Records notification-removal requests.

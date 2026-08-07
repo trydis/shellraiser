@@ -68,4 +68,30 @@ final class AgentCompletionEventTests: XCTestCase {
         XCTAssertNil(AgentActivityEvent.parse("2026-03-08T20:00:00Z\tcodex\tnot-a-uuid\tcompleted\t"))
         XCTAssertNil(AgentActivityEvent.parse("2026-03-08T20:00:00Z\tcodex\t00000000-0000-0000-0000-000000001401\tunknown\t"))
     }
+
+    /// Verifies waiting-for-input events decode to the dedicated phase.
+    func testParseDecodesWaitingForInputEvent() {
+        let surfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001404")!
+        let line = "2026-03-08T20:07:00Z\tclaudeCode\t\(surfaceId.uuidString)\twaiting-for-input\t"
+
+        let event = AgentActivityEvent.parse(line)
+
+        XCTAssertEqual(event?.agentType, .claudeCode)
+        XCTAssertEqual(event?.surfaceId, surfaceId)
+        XCTAssertEqual(event?.phase, .waitingForInput)
+    }
+
+    /// Verifies Copilot waiting-for-input events (emitted by the reclassified
+    /// `notification` hook for `permission_prompt`/`elicitation_dialog`) decode to
+    /// the dedicated phase, not `completed`.
+    func testParseDecodesCopilotWaitingForInputEvent() {
+        let surfaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001405")!
+        let line = "2026-03-08T20:08:00Z\tcopilot\t\(surfaceId.uuidString)\twaiting-for-input\t"
+
+        let event = AgentActivityEvent.parse(line)
+
+        XCTAssertEqual(event?.agentType, .copilot)
+        XCTAssertEqual(event?.surfaceId, surfaceId)
+        XCTAssertEqual(event?.phase, .waitingForInput)
+    }
 }

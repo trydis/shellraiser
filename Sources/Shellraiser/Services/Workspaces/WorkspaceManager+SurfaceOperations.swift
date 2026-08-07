@@ -42,6 +42,8 @@ extension WorkspaceManager {
         GhosttyRuntime.shared.endSearch(surfaceId: surfaceId)
         GhosttyRuntime.shared.releaseSurface(surfaceId: surfaceId)
         clearBusySurface(surfaceId)
+        clearSurfaceAwaitingInput(surfaceId)
+        clearLiveCodexSessionSurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
         clearProgressReport(surfaceId: surfaceId)
 

@@ -10,6 +10,40 @@ extension WorkspaceManager {
         return workspace.rootPane.allSurfaceIds().contains { busySurfaceIds.contains($0) }
     }
 
+    /// Returns whether any live surface in a workspace is blocked waiting for user input.
+    func isWorkspaceAwaitingInput(workspaceId: UUID) -> Bool {
+        guard let workspace = workspace(id: workspaceId) else { return false }
+
+        return workspace.rootPane.allSurfaceIds().contains { awaitingInputSurfaceIds.contains($0) }
+    }
+
+    /// Returns the number of live surfaces in a workspace currently waiting for user input.
+    func awaitingInputCount(workspaceId: UUID) -> Int {
+        guard let workspace = workspace(id: workspaceId) else { return 0 }
+
+        return workspace.rootPane.allSurfaceIds().filter { awaitingInputSurfaceIds.contains($0) }.count
+    }
+
+    /// Returns whether any surface across the app is currently waiting for user input.
+    var hasAwaitingInput: Bool {
+        !awaitingInputSurfaceIds.isEmpty
+    }
+
+    /// Focuses the first surface currently awaiting user input.
+    func jumpToNextSessionAwaitingInput() {
+        for workspace in workspaces {
+            for surfaceId in workspace.rootPane.allSurfaceIds() {
+                if awaitingInputSurfaceIds.contains(surfaceId) {
+                    CompletionDebugLogger.log(
+                        "focus awaiting-input surface=\(surfaceId.uuidString)"
+                    )
+                    focusCompletionSurface(surfaceId)
+                    return
+                }
+            }
+        }
+    }
+
     /// Enqueues a newly completed agent turn for notifications and FIFO navigation.
     func enqueueCompletion(
         workspaceId: UUID,
@@ -124,10 +158,13 @@ extension WorkspaceManager {
                 persistence: persistence
             )
             completionNotifications.removeNotifications(for: event.surfaceId)
+            clearSurfaceAwaitingInput(event.surfaceId)
             updateDockBadge()
             markSurfaceBusy(event.surfaceId)
         case .completed:
             clearBusySurface(event.surfaceId)
+            clearSurfaceAwaitingInput(event.surfaceId)
+            completionNotifications.removeNotifications(for: event.surfaceId)
             enqueueCompletion(
                 workspaceId: target.workspaceId,
                 surfaceId: event.surfaceId,
@@ -135,6 +172,35 @@ extension WorkspaceManager {
                 timestamp: event.timestamp,
                 payload: event.payload
             )
+        case .waitingForInput:
+            clearBusySurface(event.surfaceId)
+            let wasAlreadyAwaiting = awaitingInputSurfaceIds.contains(event.surfaceId)
+            markSurfaceAwaitingInput(event.surfaceId)
+            guard !wasAlreadyAwaiting else {
+                CompletionDebugLogger.log(
+                    "suppress duplicate waiting-for-input surface=\(event.surfaceId.uuidString)"
+                )
+                return
+            }
+            completionNotifications.removeNotifications(for: event.surfaceId)
+            if let surface = workspace(id: target.workspaceId)?.rootPane.surface(id: event.surfaceId),
+               let workspace = workspace(id: target.workspaceId),
+               shouldScheduleCompletionNotification(for: event.surfaceId) {
+                let fakeTarget = PendingCompletionTarget(
+                    workspaceId: target.workspaceId,
+                    paneId: target.paneId,
+                    surface: surface,
+                    sequence: nextPendingCompletionSequence
+                )
+                completionNotifications.scheduleNotification(
+                    target: fakeTarget,
+                    workspaceName: workspace.name,
+                    kind: .waitingForInput
+                )
+                CompletionDebugLogger.log(
+                    "waiting-for-input notification workspace=\(target.workspaceId.uuidString) surface=\(event.surfaceId.uuidString)"
+                )
+            }
         case .session:
             let identity = parsedSessionIdentity(from: event)
             surfaceManager.setSessionIdentity(
@@ -148,6 +214,9 @@ extension WorkspaceManager {
             )
         case .exited:
             clearBusySurface(event.surfaceId)
+            clearSurfaceAwaitingInput(event.surfaceId)
+            clearLiveCodexSessionSurface(event.surfaceId)
+            completionNotifications.removeNotifications(for: event.surfaceId)
             guard !isTerminating else { return }
             surfaceManager.setResumeEligibility(
                 workspaceId: target.workspaceId,
@@ -336,4 +405,33 @@ extension WorkspaceManager {
         busySurfaceIds.subtract(surfaceIds)
     }
 
+    /// Marks a surface as blocked waiting for user input or approval.
+    func markSurfaceAwaitingInput(_ surfaceId: UUID) {
+        awaitingInputSurfaceIds.insert(surfaceId)
+    }
+
+    /// Clears waiting-for-input state for one surface.
+    func clearSurfaceAwaitingInput(_ surfaceId: UUID) {
+        awaitingInputSurfaceIds.remove(surfaceId)
+    }
+
+    /// Clears waiting-for-input state for a group of surfaces.
+    func clearSurfacesAwaitingInput<S: Sequence>(_ surfaceIds: S) where S.Element == UUID {
+        awaitingInputSurfaceIds.subtract(surfaceIds)
+    }
+
+    /// Records that the runtime discovered a live Codex session for one surface.
+    func markLiveCodexSessionSurface(_ surfaceId: UUID) {
+        liveCodexSessionSurfaceIds.insert(surfaceId)
+    }
+
+    /// Clears one runtime-discovered Codex session gate.
+    func clearLiveCodexSessionSurface(_ surfaceId: UUID) {
+        liveCodexSessionSurfaceIds.remove(surfaceId)
+    }
+
+    /// Clears runtime-discovered Codex session gates for multiple surfaces.
+    func clearLiveCodexSessionSurfaces<S: Sequence>(_ surfaceIds: S) where S.Element == UUID {
+        liveCodexSessionSurfaceIds.subtract(surfaceIds)
+    }
 }

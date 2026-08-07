@@ -361,6 +361,16 @@ extension PaneNodeModel {
         }
     }
 
+    /// Returns the surface model for a given identifier anywhere in the pane tree.
+    func surface(id surfaceId: UUID) -> SurfaceModel? {
+        switch self {
+        case .leaf(let leaf):
+            return leaf.surfaces.first { $0.id == surfaceId }
+        case .split(let split):
+            return split.first.surface(id: surfaceId) ?? split.second.surface(id: surfaceId)
+        }
+    }
+
     /// Returns pending completion surfaces along with their owning panes.
     func pendingSurfaceSnapshots() -> [(paneId: UUID, surface: SurfaceModel)] {
         switch self {

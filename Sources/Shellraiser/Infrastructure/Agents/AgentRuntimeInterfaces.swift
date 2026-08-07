@@ -16,6 +16,14 @@ protocol AgentActivityEventMonitoring: AnyObject {
     var onEvent: ((AgentActivityEvent) -> Void)? { get set }
 }
 
+/// Semantic kind of an agent-status notification.
+enum AgentNotificationKind {
+    /// The agent completed its turn normally.
+    case finished
+    /// The agent is blocked waiting for the user to approve a permission or answer a prompt.
+    case waitingForInput
+}
+
 /// Notification manager contract consumed by the workspace manager.
 protocol AgentCompletionNotificationManaging: AnyObject {
     /// Callback fired when the user activates a completion notification.
@@ -23,6 +31,9 @@ protocol AgentCompletionNotificationManaging: AnyObject {
 
     /// Schedules a user-visible completion notification.
     func scheduleNotification(target: PendingCompletionTarget, workspaceName: String)
+
+    /// Schedules a user-visible notification of the given kind.
+    func scheduleNotification(target: PendingCompletionTarget, workspaceName: String, kind: AgentNotificationKind)
 
     /// Removes pending and delivered notifications for a surface.
     func removeNotifications(for surfaceId: UUID)
