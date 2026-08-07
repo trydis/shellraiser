@@ -170,6 +170,11 @@ struct WorkspaceCommands: Commands {
                 manager.toggleCommandPalette()
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
+
+            Button("Agent HQ") {
+                manager.toggleAgentHQ()
+            }
+            .keyboardShortcut("u", modifiers: [.command, .option])
         }
 
         CommandMenu("Workspace") {

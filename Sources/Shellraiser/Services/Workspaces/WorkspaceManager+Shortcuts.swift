@@ -54,6 +54,11 @@ extension WorkspaceManager {
             default:
                 break
             }
+
+            if !hasShift, let key = event.charactersIgnoringModifiers?.lowercased(), key == "u" {
+                toggleAgentHQ()
+                return true
+            }
         }
 
         if hasCommand, !hasOption, !hasControl, !hasShift {
