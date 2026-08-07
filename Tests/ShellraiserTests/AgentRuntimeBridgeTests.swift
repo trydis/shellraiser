@@ -73,6 +73,8 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(wrapperContents.contains("\"matcher\": \"elicitation_dialog\""))
         XCTAssertTrue(wrapperContents.contains("claudeCode \"$surface\" exited"))
         XCTAssertFalse(wrapperContents.contains("\"SubagentStop\""))
+        // PermissionRequest and Notification hooks must emit waiting-for-input, not completed.
+        XCTAssertTrue(wrapperContents.contains("waiting-for-input"))
     }
 
     /// Verifies the helper script only matches fully qualified managed runtime phases.
@@ -121,7 +123,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertFalse(claudeWrapperContents.contains("--session-id"))
         XCTAssertTrue(claudeWrapperContents.contains("claudeCode \"$surface\" exited"))
 
-        // Codex wrapper: native hooks replace polling heuristics
+        // Codex wrapper: uses native inline hooks (same as 0e76333), PermissionRequest → waiting-for-input
         XCTAssertTrue(codexWrapperContents.contains("\"$real\" --help 2>&1 | /usr/bin/grep -Fq -- \"--dangerously-bypass-hook-trust\""))
         XCTAssertFalse(codexWrapperContents.contains("            --dangerously-bypass-hook-trust \\"))
         XCTAssertTrue(codexWrapperContents.contains("hooks.SessionStart"))
@@ -131,6 +133,7 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertTrue(codexWrapperContents.contains("hooks.Stop"))
         XCTAssertTrue(codexWrapperContents.contains(#"command=\"\\\"$helper\\\" codex \\\"$surface\\\" hook-session\""#))
         XCTAssertTrue(codexWrapperContents.contains(#"command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\""#))
+        XCTAssertTrue(codexWrapperContents.contains(#"command=\"\\\"$helper\\\" codex \\\"$surface\\\" waiting-for-input\""#))
         XCTAssertTrue(codexWrapperContents.contains(#"command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\""#))
         XCTAssertTrue(codexWrapperContents.contains(#""$helper" codex "$surface" exited"#))
         XCTAssertTrue(codexWrapperContents.contains("lookup_path=\"${SHELLRAISER_ORIGINAL_PATH:-${PATH:-}}\""))
@@ -198,4 +201,37 @@ final class AgentRuntimeBridgeTests: XCTestCase {
         XCTAssertFalse(helperContents.contains("/usr/bin/python3"))
         XCTAssertTrue(helperContents.contains("phase=\"session\""))
     }
+
+    /// Verifies Copilot's notification hook signals waiting-for-input, not completed.
+    ///
+    /// A blocked Copilot permission prompt must not be reported as a finished turn.
+    /// The generated hook dispatches a `notification` phase (with stdout suppressed,
+    /// since Copilot parses hook stdout as JSON and would otherwise inject any
+    /// `additionalContext` into the session), and the helper reclassifies it to
+    /// `waiting-for-input` by parsing the payload's `notification_type` field,
+    /// failing open (trusting the hook's own matcher) when stdin is unavailable.
+    func testPrepareRuntimeSupportWritesCopilotNotificationHookAsWaitingForInput() throws {
+        let bridge = try makeBridge()
+        let helperURL = bridge.binDirectory.appendingPathComponent("shellraiser-agent-complete")
+        let copilotHookManagerURL = bridge.binDirectory.appendingPathComponent("shellraiser-copilot-hooks")
+
+        bridge.prepareRuntimeSupport()
+
+        let helperContents = try String(contentsOf: helperURL, encoding: .utf8)
+        let copilotHookManagerContents = try String(contentsOf: copilotHookManagerURL, encoding: .utf8)
+
+        // The notification hook must preserve its matcher and dispatch "notification",
+        // not hardcode "completed", and must not leak anything onto stdout.
+        XCTAssertTrue(copilotHookManagerContents.contains("permission_prompt|elicitation_dialog"))
+        XCTAssertTrue(copilotHookManagerContents.contains(#"copilot \"$SHELLRAISER_SURFACE_ID\" notification > /dev/null"#))
+
+        // The helper must classify the notification payload's notification_type field
+        // and fail open to waiting-for-input when it can't be determined.
+        XCTAssertTrue(helperContents.contains("copilot:notification)"))
+        XCTAssertTrue(helperContents.contains("\"notification_type\""))
+        XCTAssertTrue(helperContents.contains("shell_completed|shell_detached_completed|agent_completed|agent_idle)"))
+        XCTAssertTrue(helperContents.contains("phase=\"waiting-for-input\""))
+        XCTAssertTrue(helperContents.contains("started|completed|session|exited|hook-session|waiting-for-input|notification)"))
+    }
 }
+

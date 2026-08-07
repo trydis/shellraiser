@@ -23,6 +23,7 @@ enum AgentActivityPhase: String {
     case completed
     case session
     case exited
+    case waitingForInput = "waiting-for-input"
 }
 
 /// Parsed activity event emitted by managed Claude/Codex wrappers.

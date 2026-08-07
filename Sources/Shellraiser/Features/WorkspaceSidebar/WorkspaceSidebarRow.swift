@@ -8,6 +8,7 @@ struct WorkspaceSidebarRow: View {
     let focusedGitState: ResolvedGitState?
     let isWorking: Bool
     let pendingCount: Int
+    let awaitingCount: Int
     let onSelect: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
@@ -19,7 +20,7 @@ struct WorkspaceSidebarRow: View {
 
     /// Returns whether the row should render a dedicated status line.
     private var showsStatusRow: Bool {
-        pendingCount > 0
+        pendingCount > 0 || awaitingCount > 0
     }
 
     var body: some View {
@@ -106,9 +107,13 @@ struct WorkspaceSidebarRow: View {
         }
     }
 
-    /// Renders workspace-level working and pending-completion indicators.
+    /// Renders workspace-level working, awaiting-input, and pending-completion indicators.
     private var statusRow: some View {
         HStack(spacing: 10) {
+            if awaitingCount > 0 {
+                WorkspaceAwaitingInputIndicator(count: awaitingCount)
+            }
+
             if pendingCount > 0 {
                 WorkspacePendingIndicator(count: pendingCount)
             }
@@ -215,6 +220,32 @@ private struct WorkspaceWorkingIndicator: View {
                 .clipped()
                 .accessibilityLabel("Workspace is working")
         }
+    }
+}
+
+/// Pulsing indicator shown while a workspace has surfaces waiting for user input or approval.
+private struct WorkspaceAwaitingInputIndicator: View {
+    let count: Int
+
+    @ViewBuilder
+    var body: some View {
+        HStack(spacing: 4) {
+            if #available(macOS 15.0, *) {
+                Image(systemName: "exclamationmark.bubble.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+                    .symbolEffect(.pulse, options: .repeat(.continuous))
+            } else {
+                Image(systemName: "exclamationmark.bubble.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+            }
+
+            Text("\(count)")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+        .accessibilityLabel("Workspace has \(count) session\(count == 1 ? "" : "s") waiting for input")
     }
 }
 

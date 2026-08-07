@@ -222,6 +222,12 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut("u", modifiers: [.command, .shift])
             .disabled(!manager.hasPendingCompletions)
+
+            Button("Jump to Next Session Awaiting Input") {
+                manager.jumpToNextSessionAwaitingInput()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .disabled(!manager.hasAwaitingInput)
         }
 
         CommandMenu("Pane") {

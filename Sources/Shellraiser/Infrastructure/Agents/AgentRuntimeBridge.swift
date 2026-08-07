@@ -216,7 +216,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         payload=""
         session_id=""
         case "$phase" in
-            started|completed|session|exited|hook-session)
+            started|completed|session|exited|hook-session|waiting-for-input|notification)
                 ;;
             *)
                 exit 0
@@ -242,6 +242,23 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 session_id="$(printf '%s' "$compact_payload" | sed -n 's/.*"sessionId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
                 payload="$session_id"
                 phase="session"
+                ;;
+            copilot:notification)
+                hook_payload="$(cat 2>/dev/null || true)"
+                compact_payload="$(printf '%s' "$hook_payload" | tr -d '\n')"
+                notification_type="$(printf '%s' "$compact_payload" | sed -n 's/.*"notification_type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
+                case "$notification_type" in
+                    shell_completed|shell_detached_completed|agent_completed|agent_idle)
+                        exit 0
+                        ;;
+                    *)
+                        # Empty (stdin unavailable) or permission_prompt/elicitation_dialog:
+                        # fail open to waiting-for-input. The hook's "matcher" already
+                        # restricts invocation to permission_prompt|elicitation_dialog, so
+                        # this classification is defence-in-depth, not the primary filter.
+                        phase="waiting-for-input"
+                        ;;
+                esac
                 ;;
         esac
 
@@ -349,7 +366,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 "hooks": [
                   {
                     "type": "command",
-                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" waiting-for-input"
                   }
                 ]
               }
@@ -360,7 +377,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 "hooks": [
                   {
                     "type": "command",
-                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" waiting-for-input"
                   }
                 ]
               },
@@ -369,7 +386,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
                 "hooks": [
                   {
                     "type": "command",
-                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" completed"
+                    "command": "\"$SHELLRAISER_HELPER_PATH\" claudeCode \"$SHELLRAISER_SURFACE_ID\" waiting-for-input"
                   }
                 ]
               }
@@ -423,8 +440,9 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             -c "hooks.SessionStart=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" hook-session\"}]}]" \
             -c "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
             -c "hooks.PreToolUse=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" started\"}]}]" \
-            -c "hooks.PermissionRequest=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
+            -c "hooks.PermissionRequest=[{matcher=\"*\",hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" waiting-for-input\"}]}]" \
             -c "hooks.Stop=[{hooks=[{type=\"command\",command=\"\\\"$helper\\\" codex \\\"$surface\\\" completed\"}]}]" \
+            --dangerously-bypass-hook-trust \
             "$@"
         status=$?
         set -e
@@ -529,7 +547,7 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
             "userPromptSubmitted": [{"type": "command", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" started; fi", "timeoutSec": 5}],
             "preToolUse": [{"type": "command", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" started; fi", "timeoutSec": 5}],
             "agentStop": [{"type": "command", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" completed; fi", "timeoutSec": 5}],
-            "notification": [{"type": "command", "matcher": "permission_prompt|elicitation_dialog", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" completed; fi", "timeoutSec": 5}],
+            "notification": [{"type": "command", "matcher": "permission_prompt|elicitation_dialog", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" notification > /dev/null; fi", "timeoutSec": 5}],
             "sessionEnd": [{"type": "command", "bash": "if [ -n \"${SHELLRAISER_HELPER_PATH:-}\" ] && [ -n \"${SHELLRAISER_SURFACE_ID:-}\" ]; then \"$SHELLRAISER_HELPER_PATH\" copilot \"$SHELLRAISER_SURFACE_ID\" exited; fi", "timeoutSec": 5}]
           }
         }
@@ -649,4 +667,6 @@ final class AgentRuntimeBridge: AgentRuntimeSupporting {
         export SHELLRAISER_EVENT_LOG SHELLRAISER_SURFACE_ID SHELLRAISER_HELPER_PATH SHELLRAISER_REAL_CLAUDE SHELLRAISER_REAL_CODEX SHELLRAISER_REAL_COPILOT SHELLRAISER_WRAPPER_BIN SHELLRAISER_ORIGINAL_PATH
         """#
     }
+
 }
+

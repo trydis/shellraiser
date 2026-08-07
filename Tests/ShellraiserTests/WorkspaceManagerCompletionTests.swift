@@ -753,4 +753,453 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
             )
         )
     }
+
+    // MARK: - Waiting-for-input state
+
+    /// Verifies waiting-for-input events populate awaitingInputSurfaceIds without enqueuing a completion.
+    func testWaitingForInputEventMarksAwaitingWithoutEnqueuingCompletion() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001180")!,
+            title: "Waiting Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001181")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001182")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Waiting Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_000),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .waitingForInput,
+                payload: ""
+            )
+        )
+
+        XCTAssertTrue(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertTrue(manager.isWorkspaceAwaitingInput(workspaceId: workspaceId))
+        XCTAssertEqual(manager.awaitingInputCount(workspaceId: workspaceId), 1)
+        XCTAssertTrue(manager.hasAwaitingInput)
+        XCTAssertTrue(manager.pendingCompletionTargets().isEmpty, "Should not enqueue a completion")
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+        XCTAssertEqual(notifications.scheduledNotifications.count, 1)
+        XCTAssertEqual(notifications.scheduledNotifications.first?.kind, .waitingForInput)
+        XCTAssertEqual(notifications.scheduledNotifications.first?.workspaceName, "Waiting Workspace")
+    }
+
+    /// Verifies a started event clears waiting-for-input state set by a preceding permission prompt.
+    func testStartedEventClearsAwaitingInputState() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001183")!,
+            title: "Resumed Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001184")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001185")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_010),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .started,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertFalse(manager.isWorkspaceAwaitingInput(workspaceId: workspaceId))
+        XCTAssertFalse(manager.hasAwaitingInput)
+    }
+
+    /// Verifies completed event clears waiting-for-input state as well as marking completion.
+    func testCompletedEventClearsAwaitingInputState() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001186")!,
+            title: "Completing Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001187")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001188")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_020),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .completed,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertFalse(manager.hasAwaitingInput)
+    }
+
+    /// Verifies exited event clears waiting-for-input state.
+    func testExitedEventClearsAwaitingInputState() {
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let persistence = InMemoryWorkspacePersistence()
+        let manager = makeWorkspaceManager(persistence: persistence, eventMonitor: eventMonitor)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001189")!,
+            title: "Exiting Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001190")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001191")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_030),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .exited,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertFalse(manager.hasAwaitingInput)
+    }
+
+    /// Verifies a Copilot waiting-for-input event (emitted by the reclassified
+    /// `notification` hook for a genuine `permission_prompt`) marks the surface as
+    /// awaiting input, schedules a Copilot-specific notification, and does not
+    /// enqueue a completion — mirroring Claude Code/Codex behaviour for any `AgentType`.
+    func testCopilotWaitingForInputEventMarksAwaitingWithoutEnqueuingCompletion() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001192")!,
+            title: "Copilot Waiting Surface",
+            agentType: .copilot
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001193")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001194")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Copilot Waiting Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_040),
+                agentType: .copilot,
+                surfaceId: surface.id,
+                phase: .waitingForInput,
+                payload: ""
+            )
+        )
+
+        XCTAssertTrue(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertTrue(manager.isWorkspaceAwaitingInput(workspaceId: workspaceId))
+        XCTAssertTrue(manager.hasAwaitingInput)
+        XCTAssertTrue(manager.pendingCompletionTargets().isEmpty, "Should not enqueue a completion")
+        XCTAssertFalse(manager.isWorkspaceWorking(workspaceId: workspaceId))
+        XCTAssertEqual(notifications.scheduledNotifications.count, 1)
+        XCTAssertEqual(notifications.scheduledNotifications.first?.kind, .waitingForInput)
+        XCTAssertEqual(notifications.scheduledNotifications.first?.workspaceName, "Copilot Waiting Workspace")
+    }
+
+    /// Verifies two rapid waiting-for-input events for the same surface (e.g. Claude Code's
+    /// `PermissionRequest` and `Notification:permission_prompt` hooks firing back-to-back for one
+    /// prompt) schedule only a single notification instead of stacking duplicate banners.
+    func testDuplicateWaitingForInputEventsScheduleOnlyOneNotification() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001200")!,
+            title: "Duplicate Waiting Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001201")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001202")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Duplicate Waiting Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+
+        let firstEvent = AgentActivityEvent(
+            timestamp: Date(timeIntervalSince1970: 1_700_005_050),
+            agentType: .claudeCode,
+            surfaceId: surface.id,
+            phase: .waitingForInput,
+            payload: ""
+        )
+        let secondEvent = AgentActivityEvent(
+            timestamp: Date(timeIntervalSince1970: 1_700_005_051),
+            agentType: .claudeCode,
+            surfaceId: surface.id,
+            phase: .waitingForInput,
+            payload: ""
+        )
+        eventMonitor.emit(firstEvent)
+        eventMonitor.emit(secondEvent)
+
+        XCTAssertTrue(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertEqual(notifications.scheduledNotifications.count, 1, "Second duplicate event should not schedule another notification")
+        XCTAssertEqual(notifications.removedSurfaceIds, [surface.id], "Only the first, non-duplicate event should touch notification removal")
+    }
+
+    /// Verifies an intervening `.started` event between two waiting-for-input events (a genuine
+    /// second prompt) is allowed to schedule its own notification, guarding against over-suppression.
+    func testStartedBetweenWaitingForInputEventsAllowsSecondNotification() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001203")!,
+            title: "Repeated Prompt Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001204")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001205")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Repeated Prompt Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_060),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .waitingForInput,
+                payload: ""
+            )
+        )
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_061),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .started,
+                payload: ""
+            )
+        )
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_062),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .waitingForInput,
+                payload: ""
+            )
+        )
+
+        XCTAssertTrue(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertEqual(notifications.scheduledNotifications.count, 2, "A distinct prompt separated by .started should notify again")
+    }
+
+    /// Verifies a completed event that follows waiting-for-input directly (no intervening
+    /// `.started`) clears the stale "Needs Your Input" notification instead of leaving it to
+    /// linger alongside the new "Finished Responding" banner.
+    func testWaitingForInputThenCompletedRemovesStaleNotification() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001206")!,
+            title: "Waiting Then Completed Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001207")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001208")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Waiting Then Completed Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_070),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .waitingForInput,
+                payload: ""
+            )
+        )
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_071),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .completed,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertEqual(notifications.removedSurfaceIds, [surface.id, surface.id], "Completion should clear the stale waiting notification")
+        XCTAssertEqual(notifications.scheduledNotifications.last?.kind, .finished)
+    }
+
+    /// Verifies closing a surface while it is awaiting input clears the awaiting-input state
+    /// and requests removal of any delivered notification.
+    func testClosingSurfaceMidWaitClearsAwaitingInputAndRemovesNotifications() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let manager = makeWorkspaceManager(notifications: notifications)
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001209")!,
+            title: "Closed Mid Wait Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001210")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001211")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Closed Mid Wait Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        manager.closeSurface(workspaceId: workspaceId, paneId: paneId, surfaceId: surface.id)
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertTrue(notifications.removedSurfaceIds.contains(surface.id))
+    }
+
+    /// Verifies an exited event clears any stale "Needs Your Input" notification left behind
+    /// when an agent process exits directly from a waiting-for-input state.
+    func testExitedEventRemovesStaleNotification() {
+        let notifications = MockAgentCompletionNotificationManager()
+        let eventMonitor = MockAgentActivityEventMonitor()
+        let manager = makeWorkspaceManager(
+            notifications: notifications,
+            eventMonitor: eventMonitor
+        )
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001212")!,
+            title: "Exiting While Waiting Surface",
+            agentType: .claudeCode
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001213")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001214")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Exiting While Waiting Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: surface.id
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        eventMonitor.emit(
+            AgentActivityEvent(
+                timestamp: Date(timeIntervalSince1970: 1_700_005_080),
+                agentType: .claudeCode,
+                surfaceId: surface.id,
+                phase: .exited,
+                payload: ""
+            )
+        )
+
+        XCTAssertFalse(manager.awaitingInputSurfaceIds.contains(surface.id))
+        XCTAssertTrue(notifications.removedSurfaceIds.contains(surface.id))
+    }
+
+    /// Verifies jumpToNextSessionAwaitingInput focuses a surface in the awaiting-input set.
+    func testJumpToNextSessionAwaitingInputFocusesAwaitingSurface() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001192")!,
+            title: "Awaiting Input"
+        )
+        let paneId = UUID(uuidString: "00000000-0000-0000-0000-000000001193")!
+        let workspaceId = UUID(uuidString: "00000000-0000-0000-0000-000000001194")!
+        manager.workspaces = [
+            makeWorkspace(
+                id: workspaceId,
+                name: "Workspace",
+                rootPane: makeLeaf(paneId: paneId, surfaces: [surface], activeSurfaceId: surface.id),
+                focusedSurfaceId: nil
+            )
+        ]
+        manager.markSurfaceAwaitingInput(surface.id)
+
+        manager.jumpToNextSessionAwaitingInput()
+
+        XCTAssertEqual(manager.window.selectedWorkspaceId, workspaceId)
+        XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, surface.id)
+    }
 }
