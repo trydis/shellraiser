@@ -2,6 +2,16 @@ import Foundation
 
 /// Builds the flattened, globally-sorted cross-workspace session list for Agent HQ.
 extension WorkspaceManager {
+    /// Toggles presentation of the Agent HQ dashboard overlay.
+    func toggleAgentHQ() {
+        isAgentHQPresented.toggle()
+    }
+
+    /// Dismisses the Agent HQ dashboard overlay if it is open.
+    func dismissAgentHQ() {
+        isAgentHQPresented = false
+    }
+
     /// Returns every live surface across all workspaces as Agent HQ rows, in display order.
     ///
     /// Reads only already-published manager state (`gitStatesBySurfaceId`, `progressBySurfaceId`,

@@ -71,6 +71,7 @@ final class WorkspaceManager: ObservableObject {
     @Published var workspaces: [WorkspaceModel] = []
     @Published var window: WindowModel = .initial()
     @Published var isCommandPalettePresented = false
+    @Published var isAgentHQPresented = false
     @Published var pendingWorkspaceRename: WorkspaceRenameRequest?
     @Published var gitStatesBySurfaceId: [UUID: ResolvedGitState] = [:]
     @Published var busySurfaceIds: Set<UUID> = []
