@@ -2,9 +2,12 @@ import Foundation
 
 /// Builds the flattened, globally-sorted cross-workspace session list for Agent HQ.
 extension WorkspaceManager {
-    /// Toggles presentation of the Agent HQ dashboard overlay.
+    /// Toggles presentation of the Agent HQ dashboard overlay, refreshing summaries on open.
     func toggleAgentHQ() {
         isAgentHQPresented.toggle()
+        if isAgentHQPresented {
+            refreshAllAgentHQSummaries()
+        }
     }
 
     /// Dismisses the Agent HQ dashboard overlay if it is open.
@@ -82,5 +85,73 @@ extension WorkspaceManager {
         )
         completionNotifications.removeNotifications(for: entry.surfaceId)
         updateDockBadge()
+    }
+
+    /// Refreshes cached last-activity summaries for every currently live surface.
+    ///
+    /// Called when Agent HQ opens so newly visible rows show fresh text immediately, without
+    /// waiting for the next activity event. Reads happen off the main actor inside
+    /// `SessionSummaryService`; each surface refresh is independent and non-debounced here since
+    /// the overlay is opening on demand rather than reacting to a burst of events.
+    func refreshAllAgentHQSummaries() {
+        for workspace in workspaces {
+            for surfaceId in workspace.rootPane.allSurfaceIds() {
+                refreshSessionSummary(workspaceId: workspace.id, surfaceId: surfaceId, debounced: false)
+            }
+        }
+    }
+
+    /// Refreshes the cached last-activity summary for a single surface.
+    ///
+    /// Cancels any in-flight refresh for the same surface before spawning a replacement, mirroring
+    /// `refreshGitBranch`. Debounced by default so a burst of activity events (started/completed
+    /// in quick succession) coalesces into a single transcript read.
+    @discardableResult
+    func refreshSessionSummary(workspaceId: UUID, surfaceId: UUID, debounced: Bool = true) -> Task<Void, Never> {
+        sessionSummaryTasks[surfaceId]?.cancel()
+
+        guard let workspace = workspace(id: workspaceId),
+              let surface = surface(in: workspace.rootPane, surfaceId: surfaceId) else {
+            let task = Task<Void, Never> {}
+            sessionSummaryTasks[surfaceId] = task
+            return task
+        }
+
+        let request = SessionSummaryRequest(
+            agentType: surface.agentType,
+            sessionId: surface.sessionId,
+            transcriptPath: surface.transcriptPath
+        )
+        let service = sessionSummaryService
+        let debounceNanoseconds: UInt64 = debounced ? 400_000_000 : 0
+
+        let task = Task.detached(priority: .utility) { [weak self] in
+            if debounceNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: debounceNanoseconds)
+            }
+            guard !Task.isCancelled else { return }
+            let summary = await service.refreshSummary(surfaceId: surfaceId, request: request)
+            guard !Task.isCancelled, let summary else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard !Task.isCancelled else { return }
+                self.sessionSummariesBySurfaceId[surfaceId] = summary
+            }
+        }
+
+        sessionSummaryTasks[surfaceId] = task
+        return task
+    }
+
+    /// Removes cached summary state for a surface that is no longer present.
+    func clearSessionSummary(surfaceId: UUID) {
+        sessionSummaryTasks[surfaceId]?.cancel()
+        sessionSummaryTasks.removeValue(forKey: surfaceId)
+        sessionSummariesBySurfaceId.removeValue(forKey: surfaceId)
+
+        let service = sessionSummaryService
+        Task.detached(priority: .utility) {
+            await service.clearCache(surfaceId: surfaceId)
+        }
     }
 }

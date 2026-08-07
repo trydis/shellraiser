@@ -137,7 +137,8 @@ class WorkspaceTestCase: XCTestCase {
         confirmSurfaceClose: @escaping WorkspaceManager.SurfaceCloseConfirmer = { _ in true },
         gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
-        }
+        },
+        sessionSummaryService: SessionSummaryService = SessionSummaryService()
     ) -> WorkspaceManager {
         return WorkspaceManager(
             persistence: persistence ?? InMemoryWorkspacePersistence(),
@@ -149,7 +150,8 @@ class WorkspaceTestCase: XCTestCase {
             registersLocalShortcutMonitor: false,
             confirmWorkspaceDeletion: confirmWorkspaceDeletion,
             confirmSurfaceClose: confirmSurfaceClose,
-            gitStateResolver: gitStateResolver
+            gitStateResolver: gitStateResolver,
+            sessionSummaryService: sessionSummaryService
         )
     }
 }

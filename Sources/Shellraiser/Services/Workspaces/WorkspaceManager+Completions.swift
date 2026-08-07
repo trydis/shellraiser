@@ -179,6 +179,7 @@ extension WorkspaceManager {
             clearSurfaceAwaitingInput(event.surfaceId)
             updateDockBadge()
             markSurfaceBusy(event.surfaceId)
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
         case .completed:
             clearBusySurface(event.surfaceId)
             clearSurfaceAwaitingInput(event.surfaceId)
@@ -190,10 +191,12 @@ extension WorkspaceManager {
                 timestamp: event.timestamp,
                 payload: event.payload
             )
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
         case .waitingForInput:
             clearBusySurface(event.surfaceId)
             let wasAlreadyAwaiting = awaitingInputSurfaceIds.contains(event.surfaceId)
             markSurfaceAwaitingInput(event.surfaceId)
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
             guard !wasAlreadyAwaiting else {
                 CompletionDebugLogger.log(
                     "suppress duplicate waiting-for-input surface=\(event.surfaceId.uuidString)"
