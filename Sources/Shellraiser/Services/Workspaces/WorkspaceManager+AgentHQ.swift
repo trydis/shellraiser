@@ -2,11 +2,20 @@ import Foundation
 
 /// Builds the flattened, globally-sorted cross-workspace session list for Agent HQ.
 extension WorkspaceManager {
+    /// Presents Agent HQ if not already open, refreshing summaries. Idempotent — safe to call
+    /// repeatedly (e.g. from the menu-bar status item) without toggling it back closed.
+    func presentAgentHQ() {
+        guard !isAgentHQPresented else { return }
+        isAgentHQPresented = true
+        refreshAllAgentHQSummaries()
+    }
+
     /// Toggles presentation of the Agent HQ dashboard overlay, refreshing summaries on open.
     func toggleAgentHQ() {
-        isAgentHQPresented.toggle()
         if isAgentHQPresented {
-            refreshAllAgentHQSummaries()
+            dismissAgentHQ()
+        } else {
+            presentAgentHQ()
         }
     }
 
