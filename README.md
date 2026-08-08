@@ -10,6 +10,7 @@ Shellraiser is a macOS terminal workspace app built with SwiftUI and GhosttyKit.
 - Command palette and keyboard shortcuts for workspace and pane actions
 - Completion tracking and jump-to-next-completed-session workflow
 - Needs Your Input detection — distinguishes an agent blocked on a permission prompt from one that has actually finished, across Claude Code, Codex, and Copilot CLI; shows an amber sidebar indicator, sends a distinct "Needs Your Input" notification, and Cmd+Shift+I jumps to the next session awaiting input
+- Agent HQ — a cross-workspace dashboard (Cmd+Opt+U) listing every session with its live activity status and a summary of what it's doing; a menu-bar status item shows the awaiting-input/pending-completion count, with row actions to jump to, rename, close, or dismiss a session
 - AppleScript support for creating workspaces, splitting terminals, focusing surfaces, sending keys, and inputting text
 - macOS notifications — native notification when an agent turn completes in an unfocused surface; click to jump to it
 - Git branch display — sidebar shows current branch name and a linked-worktree indicator per workspace
