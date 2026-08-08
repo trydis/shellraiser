@@ -134,9 +134,11 @@ class WorkspaceTestCase: XCTestCase {
         notifications: MockAgentCompletionNotificationManager? = nil,
         eventMonitor: MockAgentActivityEventMonitor? = nil,
         confirmWorkspaceDeletion: @escaping WorkspaceManager.WorkspaceDeletionConfirmer = { _ in true },
+        confirmSurfaceClose: @escaping WorkspaceManager.SurfaceCloseConfirmer = { _ in true },
         gitStateResolver: @escaping WorkspaceManager.GitStateResolver = {
             GitBranchResolver().resolveGitState(forWorkingDirectory: $0)
-        }
+        },
+        sessionSummaryService: SessionSummaryService = SessionSummaryService()
     ) -> WorkspaceManager {
         return WorkspaceManager(
             persistence: persistence ?? InMemoryWorkspacePersistence(),
@@ -147,7 +149,9 @@ class WorkspaceTestCase: XCTestCase {
             activityEventMonitor: eventMonitor ?? MockAgentActivityEventMonitor(),
             registersLocalShortcutMonitor: false,
             confirmWorkspaceDeletion: confirmWorkspaceDeletion,
-            gitStateResolver: gitStateResolver
+            confirmSurfaceClose: confirmSurfaceClose,
+            gitStateResolver: gitStateResolver,
+            sessionSummaryService: sessionSummaryService
         )
     }
 }

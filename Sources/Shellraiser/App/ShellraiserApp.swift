@@ -121,6 +121,7 @@ final class ShellraiserAppDelegate: NSObject, NSApplicationDelegate {
 struct ShellraiserApp: App {
     @NSApplicationDelegateAdaptor(ShellraiserAppDelegate.self) private var appDelegate
     @StateObject private var manager: WorkspaceManager
+    private let agentHQStatusItemController: AgentHQStatusItemController
 
     /// Disables native macOS window tabbing so the app's own pane tabs remain the only tab UI.
     /// Exits immediately if another instance with the same bundle ID is already running,
@@ -138,6 +139,7 @@ struct ShellraiserApp: App {
         let manager = WorkspaceManager()
         _manager = StateObject(wrappedValue: manager)
         ShellraiserScriptingController.shared.install(workspaceManager: manager)
+        agentHQStatusItemController = AgentHQStatusItemController(manager: manager)
     }
 
     var body: some Scene {
@@ -228,6 +230,13 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(!manager.hasAwaitingInput)
+
+            Divider()
+
+            Button("Agent HQ") {
+                manager.toggleAgentHQ()
+            }
+            .keyboardShortcut("u", modifiers: [.command, .option])
         }
 
         CommandMenu("Pane") {

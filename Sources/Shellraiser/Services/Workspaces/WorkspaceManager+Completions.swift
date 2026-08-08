@@ -3,6 +3,24 @@ import Foundation
 
 /// Activity tracking, completion queue state, and notification flows for the shared manager.
 extension WorkspaceManager {
+    /// Derives the current activity status for a surface from live completion-tracking state.
+    ///
+    /// Always computed from `awaitingInputSurfaceIds` / `busySurfaceIds` and the surface's own
+    /// `hasPendingCompletion` flag — never a stored value, so it cannot drift from the state that
+    /// already drives notifications, the dock badge, and the FIFO completion queue.
+    func activityStatus(for surface: SurfaceModel) -> SurfaceActivityStatus {
+        if awaitingInputSurfaceIds.contains(surface.id) {
+            return .needsInput
+        }
+        if surface.hasPendingCompletion {
+            return .ready
+        }
+        if busySurfaceIds.contains(surface.id) {
+            return .running
+        }
+        return .idle
+    }
+
     /// Returns whether any live surface in a workspace is currently marked busy.
     func isWorkspaceWorking(workspaceId: UUID) -> Bool {
         guard let workspace = workspace(id: workspaceId) else { return false }
@@ -161,6 +179,7 @@ extension WorkspaceManager {
             clearSurfaceAwaitingInput(event.surfaceId)
             updateDockBadge()
             markSurfaceBusy(event.surfaceId)
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
         case .completed:
             clearBusySurface(event.surfaceId)
             clearSurfaceAwaitingInput(event.surfaceId)
@@ -172,10 +191,12 @@ extension WorkspaceManager {
                 timestamp: event.timestamp,
                 payload: event.payload
             )
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
         case .waitingForInput:
             clearBusySurface(event.surfaceId)
             let wasAlreadyAwaiting = awaitingInputSurfaceIds.contains(event.surfaceId)
             markSurfaceAwaitingInput(event.surfaceId)
+            refreshSessionSummary(workspaceId: target.workspaceId, surfaceId: event.surfaceId)
             guard !wasAlreadyAwaiting else {
                 CompletionDebugLogger.log(
                     "suppress duplicate waiting-for-input surface=\(event.surfaceId.uuidString)"

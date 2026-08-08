@@ -44,6 +44,20 @@ extension WorkspaceManager {
             }
         )
 
+        items.append(
+            CommandPaletteItem(
+                id: "workspace.agent-hq",
+                title: "Open Agent HQ",
+                category: "Workspace",
+                systemImage: "rectangle.stack.badge.person.crop",
+                shortcut: "cmd-opt-u",
+                isEnabled: true,
+                keywords: ["agent", "hq", "dashboard", "sessions", "all", "overview"]
+            ) {
+                self.toggleAgentHQ()
+            }
+        )
+
         for (index, workspace) in workspaces.enumerated() where index < 9 {
             items.append(
                 CommandPaletteItem(

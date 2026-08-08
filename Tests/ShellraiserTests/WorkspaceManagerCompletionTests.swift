@@ -1202,4 +1202,45 @@ final class WorkspaceManagerCompletionTests: WorkspaceTestCase {
         XCTAssertEqual(manager.window.selectedWorkspaceId, workspaceId)
         XCTAssertEqual(manager.workspaces[0].focusedSurfaceId, surface.id)
     }
+
+    /// Verifies activityStatus prioritizes awaiting-input over pending completion and busy state.
+    func testActivityStatusPrioritizesNeedsInputOverReadyAndRunning() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001200")!,
+            hasPendingCompletion: true
+        )
+        manager.markSurfaceAwaitingInput(surface.id)
+        manager.markSurfaceBusy(surface.id)
+
+        XCTAssertEqual(manager.activityStatus(for: surface), .needsInput)
+    }
+
+    /// Verifies activityStatus reports ready when a completion is queued but input is not awaited.
+    func testActivityStatusReportsReadyForPendingCompletion() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000001201")!,
+            hasPendingCompletion: true
+        )
+
+        XCTAssertEqual(manager.activityStatus(for: surface), .ready)
+    }
+
+    /// Verifies activityStatus reports running for a busy surface with no queued completion.
+    func testActivityStatusReportsRunningForBusySurface() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001202")!)
+        manager.markSurfaceBusy(surface.id)
+
+        XCTAssertEqual(manager.activityStatus(for: surface), .running)
+    }
+
+    /// Verifies activityStatus reports idle when no tracked state applies to the surface.
+    func testActivityStatusReportsIdleByDefault() {
+        let manager = makeWorkspaceManager()
+        let surface = makeSurface(id: UUID(uuidString: "00000000-0000-0000-0000-000000001203")!)
+
+        XCTAssertEqual(manager.activityStatus(for: surface), .idle)
+    }
 }

@@ -61,6 +61,13 @@
 		A1000054 /* SurfaceProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000054; };
 		A1000055 /* SurfaceSearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000055; };
 		A1000056 /* TerminalSearchOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000056; };
+		A1000057 /* SurfaceActivityStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000057; };
+		A1000058 /* SessionSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000058; };
+		A1000059 /* AgentHQEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000059; };
+		A1000060 /* WorkspaceManager+AgentHQ.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000060; };
+		A1000061 /* AgentHQOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000061; };
+		A1000062 /* AgentHQRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000062; };
+		A1000063 /* AgentHQStatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000063; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -118,6 +125,13 @@
 		A2000054 /* SurfaceProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkspaceDetail/SurfaceProgressBar.swift; sourceTree = "<group>"; };
 		A2000055 /* SurfaceSearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceSearchState.swift; sourceTree = "<group>"; };
 		A2000056 /* TerminalSearchOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkspaceDetail/TerminalSearchOverlay.swift; sourceTree = "<group>"; };
+		A2000057 /* SurfaceActivityStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SurfaceActivityStatus.swift; sourceTree = "<group>"; };
+		A2000058 /* SessionSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure/History/SessionSummaryService.swift; sourceTree = "<group>"; };
+		A2000059 /* AgentHQEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/AgentHQEntry.swift; sourceTree = "<group>"; };
+		A2000060 /* WorkspaceManager+AgentHQ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/Workspaces/WorkspaceManager+AgentHQ.swift"; sourceTree = "<group>"; };
+		A2000061 /* AgentHQOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/AgentHQ/AgentHQOverlay.swift; sourceTree = "<group>"; };
+		A2000062 /* AgentHQRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/AgentHQ/AgentHQRow.swift; sourceTree = "<group>"; };
+		A2000063 /* AgentHQStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/AgentHQ/AgentHQStatusItemController.swift; sourceTree = "<group>"; };
 		A3000001 /* Shellraiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shellraiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -198,6 +212,13 @@
 				A2000047 /* ShellraiserScriptCommands.swift */,
 				A2000048 /* WorkspaceManager+AppleScript.swift */,
 				A2000049 /* ShellraiserScripting.xml */,
+				A2000057 /* SurfaceActivityStatus.swift */,
+				A2000058 /* SessionSummaryService.swift */,
+				A2000059 /* AgentHQEntry.swift */,
+				A2000060 /* WorkspaceManager+AgentHQ.swift */,
+				A2000061 /* AgentHQOverlay.swift */,
+				A2000062 /* AgentHQRow.swift */,
+				A2000063 /* AgentHQStatusItemController.swift */,
 			);
 			path = Sources/Shellraiser;
 			sourceTree = "<group>";
@@ -339,6 +360,13 @@
 				A1000046 /* ScriptableTerminal.swift in Sources */,
 				A1000047 /* ShellraiserScriptCommands.swift in Sources */,
 				A1000048 /* WorkspaceManager+AppleScript.swift in Sources */,
+				A1000057 /* SurfaceActivityStatus.swift in Sources */,
+				A1000058 /* SessionSummaryService.swift in Sources */,
+				A1000059 /* AgentHQEntry.swift in Sources */,
+				A1000060 /* WorkspaceManager+AgentHQ.swift in Sources */,
+				A1000061 /* AgentHQOverlay.swift in Sources */,
+				A1000062 /* AgentHQRow.swift in Sources */,
+				A1000063 /* AgentHQStatusItemController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -481,6 +509,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",
+					"-lsqlite3",
 					"-framework",
 					Carbon,
 				);
@@ -512,6 +541,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",
+					"-lsqlite3",
 					"-framework",
 					Carbon,
 				);

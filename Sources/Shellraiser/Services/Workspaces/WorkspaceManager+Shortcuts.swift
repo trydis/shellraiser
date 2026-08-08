@@ -54,6 +54,11 @@ extension WorkspaceManager {
             default:
                 break
             }
+
+            if !hasShift, let key = event.charactersIgnoringModifiers?.lowercased(), key == "u" {
+                toggleAgentHQ()
+                return true
+            }
         }
 
         if hasCommand, !hasOption, !hasControl, !hasShift {
@@ -124,7 +129,7 @@ extension WorkspaceManager {
             return true
         }
 
-        if key == "d" {
+        if key == "d", !isAgentHQPresented {
             return performFocusedPaneCommand(.split(hasShift ? .vertical : .horizontal))
         }
 

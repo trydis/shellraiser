@@ -22,6 +22,9 @@ struct ContentView: View {
         .sheet(isPresented: $manager.isCommandPalettePresented) {
             CommandPaletteSheet(manager: manager)
         }
+        .sheet(isPresented: $manager.isAgentHQPresented) {
+            AgentHQSheet(manager: manager)
+        }
         .sheet(
             isPresented: pendingWorkspaceRenameIsPresented,
             onDismiss: {

@@ -46,6 +46,7 @@ extension WorkspaceManager {
         clearLiveCodexSessionSurface(surfaceId)
         clearGitBranch(surfaceId: surfaceId)
         clearProgressReport(surfaceId: surfaceId)
+        clearSessionSummary(surfaceId: surfaceId)
 
         if let workspace = workspace(id: workspaceId),
            let focusedSurfaceId = workspace.focusedSurfaceId ?? workspace.rootPane.firstActiveSurfaceId(),

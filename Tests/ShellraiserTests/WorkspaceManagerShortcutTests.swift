@@ -118,6 +118,23 @@ final class WorkspaceManagerShortcutTests: WorkspaceTestCase {
         XCTAssertEqual(manager.workspaces[1].focusedSurfaceId, pendingSurface.id)
     }
 
+    /// Verifies Cmd+Opt+U toggles the Agent HQ overlay without being swallowed by the pane-focus handler.
+    func testHandleLocalShortcutTogglesAgentHQ() {
+        let manager = makeWorkspaceManager()
+
+        let didToggleOn = manager.handleLocalShortcut(
+            makeKeyEvent(characters: "u", modifierFlags: [.command, .option], keyCode: 32)
+        )
+        XCTAssertTrue(didToggleOn)
+        XCTAssertTrue(manager.isAgentHQPresented)
+
+        let didToggleOff = manager.handleLocalShortcut(
+            makeKeyEvent(characters: "u", modifierFlags: [.command, .option], keyCode: 32)
+        )
+        XCTAssertTrue(didToggleOff)
+        XCTAssertFalse(manager.isAgentHQPresented)
+    }
+
     /// Creates a synthetic key event for shortcut routing tests.
     private func makeKeyEvent(
         characters: String,

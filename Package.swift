@@ -24,6 +24,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedLibrary("c++"),
+                .linkedLibrary("sqlite3"),
                 .linkedFramework("Carbon")
             ]
         ),
@@ -32,7 +33,10 @@ let package = Package(
             dependencies: [
                 "Shellraiser"
             ],
-            path: "Tests/ShellraiserTests"
+            path: "Tests/ShellraiserTests",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .binaryTarget(
             name: "GhosttyKit",
