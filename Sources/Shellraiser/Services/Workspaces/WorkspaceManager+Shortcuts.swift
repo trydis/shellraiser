@@ -129,7 +129,7 @@ extension WorkspaceManager {
             return true
         }
 
-        if key == "d" {
+        if key == "d", !isAgentHQPresented {
             return performFocusedPaneCommand(.split(hasShift ? .vertical : .horizontal))
         }
 

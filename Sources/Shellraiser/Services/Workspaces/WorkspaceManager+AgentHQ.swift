@@ -70,8 +70,13 @@ extension WorkspaceManager {
     }
 
     /// Closes an Agent HQ entry's surface, confirming first when the agent is still running.
+    ///
+    /// Re-resolves the surface's current activity status rather than trusting `entry.status`,
+    /// which is a snapshot that may be stale by the time the user acts on it.
     func closeAgentHQEntry(_ entry: AgentHQEntry) {
-        if entry.status == .running {
+        if let workspace = workspace(id: entry.workspaceId),
+           let surface = surface(in: workspace.rootPane, surfaceId: entry.surfaceId),
+           activityStatus(for: surface) == .running {
             let request = SurfaceCloseRequest(
                 workspaceId: entry.workspaceId,
                 paneId: entry.paneId,
@@ -85,7 +90,17 @@ extension WorkspaceManager {
     }
 
     /// Dismisses a pending completion for an Agent HQ entry without jumping to it.
+    ///
+    /// Re-resolves the current surface and only clears when its pending completion sequence still
+    /// matches the entry's snapshot, so a completion that advanced after the entry was rendered
+    /// (a newer one the user hasn't seen) is never cleared out from under them.
     func dismissAgentHQEntryCompletion(_ entry: AgentHQEntry) {
+        guard let workspace = workspace(id: entry.workspaceId),
+              let surface = surface(in: workspace.rootPane, surfaceId: entry.surfaceId),
+              surface.pendingCompletionSequence == entry.pendingCompletionSequence else {
+            return
+        }
+
         surfaceManager.clearPendingCompletion(
             workspaceId: entry.workspaceId,
             surfaceId: entry.surfaceId,

@@ -23,10 +23,23 @@ actor SessionSummaryService {
     private let codexSessionsRootURL: URL
     private let copilotSessionStoreURL: URL
 
-    private var cache: [UUID: String] = [:]
+    private var cache: [UUID: CachedSummary] = [:]
     private var inFlightSurfaceIds: Set<UUID> = []
     /// Cache of resolved Codex rollout file paths by session id, avoiding repeated tree walks.
     private var codexRolloutPathBySessionId: [String: URL] = [:]
+    /// Session ids a full tree walk failed to resolve, with the time of that attempt — avoids
+    /// re-scanning `~/.codex/sessions` on every subsequent lookup for a still-missing id.
+    private var codexRolloutMissLastCheckedAt: [String: Date] = [:]
+    /// How long a negative Codex rollout lookup is trusted before retrying the tree walk.
+    private static let codexRolloutMissRetryInterval: TimeInterval = 30
+
+    /// A resolved summary paired with the request that produced it, so a later request with
+    /// different identity (e.g. the surface's session was replaced) never falls back to a
+    /// stale summary from a different session.
+    private struct CachedSummary {
+        let request: SessionSummaryRequest
+        let summary: String
+    }
 
     /// Creates a summary service rooted at the real Codex/Copilot home directories by default.
     init(
@@ -45,17 +58,19 @@ actor SessionSummaryService {
 
     /// Returns the cached summary for a surface without triggering a fresh read.
     func cachedSummary(surfaceId: UUID) -> String? {
-        cache[surfaceId]
+        cache[surfaceId]?.summary
     }
 
     /// Resolves and caches the last-activity summary for a surface, single-flight per surface.
     ///
     /// Returns the freshly resolved summary, or the previously cached value when a refresh is
-    /// already in flight for this surface or the fresh read comes back empty.
+    /// already in flight for this surface or the fresh read comes back empty — but only when the
+    /// cached value was resolved for this exact request. A cached summary from a different
+    /// request (e.g. the surface's session id changed) is never returned as a stale fallback.
     @discardableResult
     func refreshSummary(surfaceId: UUID, request: SessionSummaryRequest) async -> String? {
         guard !inFlightSurfaceIds.contains(surfaceId) else {
-            return cache[surfaceId]
+            return cachedSummary(surfaceId: surfaceId, matching: request)
         }
 
         let hasSessionId = !request.sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -66,11 +81,17 @@ actor SessionSummaryService {
         defer { inFlightSurfaceIds.remove(surfaceId) }
 
         guard let summary = computeSummary(for: request) else {
-            return cache[surfaceId]
+            return cachedSummary(surfaceId: surfaceId, matching: request)
         }
 
-        cache[surfaceId] = summary
+        cache[surfaceId] = CachedSummary(request: request, summary: summary)
         return summary
+    }
+
+    /// Returns the cached summary for a surface only if it was resolved for `request`.
+    private func cachedSummary(surfaceId: UUID, matching request: SessionSummaryRequest) -> String? {
+        guard let cached = cache[surfaceId], cached.request == request else { return nil }
+        return cached.summary
     }
 
     /// Removes a cached summary, e.g. when the owning surface closes.
@@ -106,37 +127,32 @@ actor SessionSummaryService {
                 continue
             }
 
-            if let text = lastTextBlock(in: content) {
-                return oneLine(text)
-            }
-
-            if let toolName = lastToolUseName(in: content) {
-                return oneLine("Running \(toolName)…")
+            if let summary = lastActionSummary(in: content) {
+                return summary
             }
         }
 
         return nil
     }
 
-    /// Returns the final `"type": "text"` block's text from a Claude content array, if any.
-    private func lastTextBlock(in content: [[String: Any]]) -> String? {
+    /// Returns a one-line summary for the final valid block in a Claude content array — a
+    /// `"type": "text"` block's text, or a `"type": "tool_use"` block's "Running <tool>…" label.
+    /// Scans once from the end so a trailing tool call takes precedence over earlier text in the
+    /// same message, matching what the agent did last.
+    private func lastActionSummary(in content: [[String: Any]]) -> String? {
         for block in content.reversed() {
-            if block["type"] as? String == "text",
-               let text = block["text"] as? String,
-               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return text
-            }
-        }
-        return nil
-    }
-
-    /// Returns the final `"type": "tool_use"` block's tool name from a Claude content array, if any.
-    private func lastToolUseName(in content: [[String: Any]]) -> String? {
-        for block in content.reversed() {
-            if block["type"] as? String == "tool_use",
-               let name = block["name"] as? String,
-               !name.isEmpty {
-                return name
+            switch block["type"] as? String {
+            case "text":
+                if let text = block["text"] as? String,
+                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return oneLine(text)
+                }
+            case "tool_use":
+                if let name = block["name"] as? String, !name.isEmpty {
+                    return oneLine("Running \(name)…")
+                }
+            default:
+                continue
             }
         }
         return nil
@@ -164,10 +180,18 @@ actor SessionSummaryService {
         return nil
     }
 
-    /// Locates the Codex rollout file for a session id, caching the resolved path.
+    /// Locates the Codex rollout file for a session id, caching the resolved path. A negative
+    /// result is remembered for `codexRolloutMissRetryInterval` so a still-missing session id
+    /// (e.g. its rollout file hasn't been written yet) doesn't trigger a full tree walk on every
+    /// call — while still eventually retrying in case the file appears.
     private func resolveCodexRolloutURL(sessionId: String) -> URL? {
         if let cached = codexRolloutPathBySessionId[sessionId] {
             return cached
+        }
+
+        if let lastCheckedAt = codexRolloutMissLastCheckedAt[sessionId],
+           Date().timeIntervalSince(lastCheckedAt) < Self.codexRolloutMissRetryInterval {
+            return nil
         }
 
         guard let enumerator = fileManager.enumerator(
@@ -181,8 +205,11 @@ actor SessionSummaryService {
         let suffix = "-\(sessionId).jsonl"
         for case let fileURL as URL in enumerator where fileURL.lastPathComponent.hasSuffix(suffix) {
             codexRolloutPathBySessionId[sessionId] = fileURL
+            codexRolloutMissLastCheckedAt.removeValue(forKey: sessionId)
             return fileURL
         }
+
+        codexRolloutMissLastCheckedAt[sessionId] = Date()
 
         return nil
     }

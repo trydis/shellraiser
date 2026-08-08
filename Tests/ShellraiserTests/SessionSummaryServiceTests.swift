@@ -66,6 +66,26 @@ final class SessionSummaryServiceTests: XCTestCase {
         XCTAssertEqual(summary, "Running Bash…")
     }
 
+    /// Verifies a tool_use block appearing *after* text in the same message's content array wins,
+    /// since it reflects the agent's most recent action — a later tool call must not be masked by
+    /// earlier explanatory text within the same message.
+    func testClaudeSummaryPrefersTrailingToolUseOverLeadingText() async {
+        let transcriptURL = tempDirectoryURL.appendingPathComponent("transcript.jsonl")
+        let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"Let me check."},{"type":"tool_use","name":"Bash","input":{}}]}}"#
+        try? line.write(to: transcriptURL, atomically: true, encoding: .utf8)
+
+        let service = SessionSummaryService(
+            codexSessionsRootURL: tempDirectoryURL.appendingPathComponent("codex"),
+            copilotHomeURL: tempDirectoryURL.appendingPathComponent("copilot")
+        )
+        let summary = await service.refreshSummary(
+            surfaceId: UUID(),
+            request: SessionSummaryRequest(agentType: .claudeCode, sessionId: "", transcriptPath: transcriptURL.path)
+        )
+
+        XCTAssertEqual(summary, "Running Bash…")
+    }
+
     /// Verifies a missing transcript file degrades to nil rather than throwing or crashing.
     func testClaudeSummaryReturnsNilForMissingTranscript() async {
         let service = SessionSummaryService(
@@ -241,6 +261,37 @@ final class SessionSummaryServiceTests: XCTestCase {
         await service.clearCache(surfaceId: surfaceId)
         let cachedAfterClear = await service.cachedSummary(surfaceId: surfaceId)
         XCTAssertNil(cachedAfterClear)
+    }
+
+    /// Verifies a stale cached summary from a prior request is never returned once the surface's
+    /// request identity changes (e.g. its session id was replaced) and the new request cannot yet
+    /// be resolved — the cache must not leak a previous session's summary onto a new one.
+    func testCacheDoesNotFallBackToPreviousRequestSummary() async {
+        let transcriptURL = tempDirectoryURL.appendingPathComponent("transcript.jsonl")
+        try? #"{"type":"assistant","message":{"content":[{"type":"text","text":"First session text."}]}}"#
+            .write(to: transcriptURL, atomically: true, encoding: .utf8)
+
+        let service = SessionSummaryService(
+            codexSessionsRootURL: tempDirectoryURL.appendingPathComponent("codex"),
+            copilotHomeURL: tempDirectoryURL.appendingPathComponent("copilot")
+        )
+        let surfaceId = UUID()
+        let firstRequest = SessionSummaryRequest(
+            agentType: .claudeCode, sessionId: "", transcriptPath: transcriptURL.path
+        )
+        let summary = await service.refreshSummary(surfaceId: surfaceId, request: firstRequest)
+        XCTAssertEqual(summary, "First session text.")
+
+        // Second request points at a different (missing) transcript, simulating the surface's
+        // session being replaced. The unresolvable new request must not fall back to the old text.
+        let secondRequest = SessionSummaryRequest(
+            agentType: .claudeCode,
+            sessionId: "",
+            transcriptPath: tempDirectoryURL.appendingPathComponent("missing.jsonl").path
+        )
+        let refreshed = await service.refreshSummary(surfaceId: surfaceId, request: secondRequest)
+
+        XCTAssertNil(refreshed)
     }
 
     // MARK: - Fixtures

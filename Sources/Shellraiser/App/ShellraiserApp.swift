@@ -172,11 +172,6 @@ struct WorkspaceCommands: Commands {
                 manager.toggleCommandPalette()
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
-
-            Button("Agent HQ") {
-                manager.toggleAgentHQ()
-            }
-            .keyboardShortcut("u", modifiers: [.command, .option])
         }
 
         CommandMenu("Workspace") {
@@ -235,6 +230,13 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(!manager.hasAwaitingInput)
+
+            Divider()
+
+            Button("Agent HQ") {
+                manager.toggleAgentHQ()
+            }
+            .keyboardShortcut("u", modifiers: [.command, .option])
         }
 
         CommandMenu("Pane") {
