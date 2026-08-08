@@ -15,13 +15,17 @@ final class AgentHQStatusItemController {
     /// Creates the status item and begins observing manager state for count updates.
     init(manager: WorkspaceManager) {
         self.manager = manager
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
+            let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+                .applying(.init(scale: .medium))
             button.image = NSImage(
-                systemSymbolName: "rectangle.stack.badge.person.crop",
+                systemSymbolName: "rectangle.stack.badge.person.crop.fill",
                 accessibilityDescription: "Agent HQ"
-            )
+            )?
+                .withSymbolConfiguration(symbolConfiguration)
+            button.image?.isTemplate = true
             button.imagePosition = .imageLeading
             button.target = self
             button.action = #selector(handleClick)
